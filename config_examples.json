@@ -1,0 +1,161 @@
+{
+  "_comment": "Production Configuration - Copy sections below to separate .json files",
+  
+  "production_config": {
+    "claude_binary": "claude",
+    "timeout": 60.0,
+    "max_turns": 10,
+    "verbose": false,
+    "system_prompt": "You are a helpful, professional assistant providing accurate and concise responses.",
+    "allowed_tools": [
+      "Python",
+      "Bash(npm install,pip install,git clone,git pull,git push)",
+      "mcp__filesystem__read",
+      "mcp__filesystem__write",
+      "mcp__database__query"
+    ],
+    "disallowed_tools": [
+      "Bash(rm,del,sudo,su)",
+      "mcp__admin__*"
+    ],
+    "mcp_config_path": "./mcp_config.json",
+    "working_directory": "./workspace",
+    "environment_vars": {
+      "NODE_ENV": "production",
+      "PYTHON_ENV": "production",
+      "LOG_LEVEL": "INFO"
+    },
+    "max_retries": 3,
+    "retry_delay": 2.0,
+    "retry_backoff_factor": 2.0,
+    "enable_metrics": true,
+    "log_level": 20
+  },
+  
+  "development_config.json": {
+    "claude_binary": "claude",
+    "timeout": 30.0,
+    "max_turns": 5,
+    "verbose": true,
+    "system_prompt": "You are a development assistant. Be detailed and explain your reasoning.",
+    "allowed_tools": [
+      "Python",
+      "Bash",
+      "mcp__filesystem__*",
+      "mcp__database__*",
+      "mcp__web__*"
+    ],
+    "disallowed_tools": [],
+    "mcp_config_path": "./mcp_dev_config.json",
+    "working_directory": "./dev_workspace",
+    "environment_vars": {
+      "NODE_ENV": "development",
+      "PYTHON_ENV": "development",
+      "DEBUG": "1",
+      "LOG_LEVEL": "DEBUG"
+    },
+    "max_retries": 1,
+    "retry_delay": 0.5,
+    "retry_backoff_factor": 1.5,
+    "enable_metrics": true,
+    "log_level": 10
+  },
+  
+  "minimal_config.json": {
+    "claude_binary": "claude",
+    "timeout": 30.0,
+    "max_retries": 1,
+    "enable_metrics": false,
+    "log_level": 30
+  },
+  
+  "high_security_config.json": {
+    "claude_binary": "claude",
+    "timeout": 45.0,
+    "max_turns": 3,
+    "verbose": false,
+    "system_prompt": "You are a security-conscious assistant. Always prioritize safety and best practices.",
+    "allowed_tools": [
+      "Python(import,def,class,if,for,while,try,except)",
+      "Bash(ls,cat,grep,find,echo)"
+    ],
+    "disallowed_tools": [
+      "Bash(rm,del,sudo,su,chmod,chown,kill,killall)",
+      "Python(exec,eval,__import__,open)",
+      "mcp__admin__*",
+      "mcp__system__*",
+      "mcp__network__*"
+    ],
+    "working_directory": "./secure_workspace",
+    "environment_vars": {
+      "SECURITY_MODE": "strict",
+      "AUDIT_LOG": "enabled"
+    },
+    "max_retries": 2,
+    "retry_delay": 1.0,
+    "retry_backoff_factor": 2.0,
+    "enable_metrics": true,
+    "log_level": 20
+  },
+  
+  "mcp_config.json": {
+    "servers": {
+      "filesystem": {
+        "command": "mcp-server-filesystem",
+        "args": ["./workspace"]
+      },
+      "database": {
+        "command": "mcp-server-sqlite",
+        "args": ["./data/app.db"]
+      },
+      "web": {
+        "command": "mcp-server-web",
+        "args": ["--port", "8080", "--cors", "true"]
+      },
+      "git": {
+        "command": "mcp-server-git",
+        "args": ["./repository"]
+      }
+    }
+  },
+  
+  "mcp_dev_config.json": {
+    "servers": {
+      "filesystem": {
+        "command": "mcp-server-filesystem",
+        "args": ["./dev_workspace", "--allow-write", "true"]
+      },
+      "database": {
+        "command": "mcp-server-sqlite",
+        "args": ["./data/dev.db", "--debug", "true"]
+      },
+      "web": {
+        "command": "mcp-server-web",
+        "args": ["--port", "3000", "--cors", "true", "--debug", "true"]
+      },
+      "testing": {
+        "command": "mcp-server-testing",
+        "args": ["--mock-mode", "true"]
+      }
+    }
+  },
+  
+  "performance_config.json": {
+    "claude_binary": "claude",
+    "timeout": 120.0,
+    "max_turns": 20,
+    "verbose": false,
+    "allowed_tools": ["*"],
+    "disallowed_tools": [],
+    "max_retries": 5,
+    "retry_delay": 0.1,
+    "retry_backoff_factor": 1.2,
+    "enable_metrics": true,
+    "log_level": 30,
+    "environment_vars": {
+      "PERFORMANCE_MODE": "optimized",
+      "BATCH_SIZE": "large",
+      "CACHE_ENABLED": "true"
+    }
+  }
+}

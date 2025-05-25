@@ -1,0 +1,261 @@
+# Dockerfile for Claude Code SDK Wrapper
+# Multi-stage build for production deployment
+
+# Build stage
+FROM python:3.11-slim as builder
+
+# Set build arguments
+ARG BUILD_ENV=production
+ARG CLAUDE_VERSION=latest
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash claude
+
+# Set work directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+COPY requirements-dev.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir -r requirements.txt
+RUN if [ "$BUILD_ENV" = "development" ]; then pip install --no-cache-dir -r requirements-dev.txt; fi
+
+# Production stage
+FROM python:3.11-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash claude
+
+# Set work directory
+WORKDIR /app
+
+# Copy from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Install Claude Code CLI (you'll need to adjust this based on actual installation)
+# This is a placeholder - replace with actual Claude Code installation
+RUN echo "#!/bin/bash\necho 'Mock Claude Code CLI - Replace with actual installation'" > /usr/local/bin/claude \
+    && chmod +x /usr/local/bin/claude
+
+# Copy application code
+COPY claude_code_wrapper.py .
+COPY claude_cli.py .
+COPY config/ ./config/
+COPY scripts/ ./scripts/
+
+# Create necessary directories
+RUN mkdir -p /app/workspace /app/data /app/logs \
+    && chown -R claude:claude /app
+
+# Switch to non-root user
+USER claude
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV CLAUDE_CONFIG_PATH=/app/config/production_config.json
+ENV CLAUDE_WORKSPACE=/app/workspace
+ENV CLAUDE_LOG_DIR=/app/logs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python claude_cli.py health || exit 1
+
+# Default command
+CMD ["python", "claude_cli.py", "--help"]
+
+# Labels for metadata
+LABEL maintainer="your-email@example.com"
+LABEL version="1.0.0"
+LABEL description="Claude Code SDK Wrapper - Enterprise Ready"
+
+# Expose port for potential web interface
+EXPOSE 8080
+
+# docker-compose.yml content for multi-service setup
+---
+version: '3.8'
+
+services:
+  claude-wrapper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_ENV: production
+    container_name: claude-wrapper
+    restart: unless-stopped
+    volumes:
+      - ./workspace:/app/workspace
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+    environment:
+      - CLAUDE_CONFIG_PATH=/app/config/production_config.json
+      - LOG_LEVEL=INFO
+      - METRICS_ENABLED=true
+    ports:
+      - "8080:8080"
+    networks:
+      - claude-network
+    
+  claude-wrapper-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_ENV: development
+    container_name: claude-wrapper-dev
+    restart: "no"
+    volumes:
+      - ./:/app
+      - ./dev_workspace:/app/workspace
+      - ./dev_data:/app/data
+    environment:
+      - CLAUDE_CONFIG_PATH=/app/config/development_config.json
+      - LOG_LEVEL=DEBUG
+      - METRICS_ENABLED=true
+    ports:
+      - "3000:3000"
+    networks:
+      - claude-network
+    command: ["python", "claude_cli.py", "session", "--interactive"]
+
+  # Optional: Redis for caching/session storage
+  redis:
+    image: redis:alpine
+    container_name: claude-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - claude-network
+
+  # Optional: PostgreSQL for persistent storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: claude-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: claude_db
+      POSTGRES_USER: claude_user
+      POSTGRES_PASSWORD: claude_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - claude-network
+
+  # Optional: Monitoring with Prometheus
+  prometheus:
+    image: prom/prometheus
+    container_name: claude-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - claude-network
+
+  # Optional: Grafana for visualization
+  grafana:
+    image: grafana/grafana
+    container_name: claude-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning:ro
+    networks:
+      - claude-network
+
+networks:
+  claude-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  postgres_data:
+  grafana_data:
+
+# docker-compose.override.yml for local development
+---
+version: '3.8'
+
+services:
+  claude-wrapper-dev:
+    volumes:
+      - ./:/app
+    environment:
+      - DEBUG=1
+      - HOT_RELOAD=true
+    command: ["python", "-m", "watchdog", "auto-restart", "--", "python", "claude_cli.py", "session", "--interactive"]
+
+# Production deployment docker-compose.prod.yml
+---
+version: '3.8'
+
+services:
+  claude-wrapper:
+    image: claude-wrapper:latest
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    environment:
+      - CLAUDE_CONFIG_PATH=/app/config/production_config.json
+      - LOG_LEVEL=INFO
+      - METRICS_ENABLED=true
+    secrets:
+      - claude_api_key
+      - db_password
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - claude-wrapper
+
+secrets:
+  claude_api_key:
+    external: true
+  db_password:
+    external: true
