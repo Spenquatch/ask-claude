@@ -261,12 +261,14 @@ class ClaudeCodeResponseParser(ResponseParser):
             data = json.loads(raw_output.strip())
             self.logger.debug(f"Parsed JSON structure: {list(data.keys()) if isinstance(data, dict) else type(data)}")
             
-            if not isinstance(data, dict):
-                raise ClaudeCodeValidationError(
-                    f"Expected JSON object, got {type(data).__name__}",
-                    "response_type",
-                    data
-                )
+            # Handle JSON arrays by extracting the most relevant response
+            if isinstance(data, list):
+                self.logger.debug(f"Received JSON array with {len(data)} items")
+                data = self._extract_from_json_array(data)
+            elif not isinstance(data, dict):
+                # Handle other non-dict types by converting to dict
+                self.logger.debug(f"Converting {type(data).__name__} to dict format")
+                data = {"result": str(data)}
             
             # Extract content from the 'result' field (based on your output)
             content = ""
@@ -319,6 +321,34 @@ class ClaudeCodeResponseParser(ResponseParser):
             self.logger.warning(f"Invalid JSON response: {e}")
             # Graceful fallback to text parsing
             return self._parse_text_response(raw_output)
+    
+    def _extract_from_json_array(self, data: list) -> dict:
+        """Extract the most relevant response from a JSON array."""
+        if not data:
+            return {"result": "Empty response array"}
+        
+        # Strategy 1: Look for the last non-system message
+        for item in reversed(data):
+            if isinstance(item, dict):
+                # Skip system/metadata messages
+                if item.get("type") not in ["init", "system", "metadata"]:
+                    return item
+        
+        # Strategy 2: Look for items with content
+        for item in data:
+            if isinstance(item, dict) and any(key in item for key in ["result", "content", "response", "message"]):
+                return item
+        
+        # Strategy 3: Use the last item if it's a dict
+        if isinstance(data[-1], dict):
+            return data[-1]
+        
+        # Strategy 4: Create a synthetic response from the array
+        return {
+            "result": str(data[-1]) if data else "No content",
+            "_array_length": len(data),
+            "_original_array": data
+        }
     
     def _parse_text_response(self, raw_output: str) -> ClaudeCodeResponse:
         """Parse text response from Claude Code."""
@@ -645,7 +675,10 @@ class ClaudeCodeWrapper:
         """Build Claude Code command with validation."""
         cmd = [config.claude_binary, "--print", query]
         
-        if output_format != OutputFormat.TEXT:
+        if output_format == OutputFormat.STREAM_JSON:
+            cmd.extend(["--output-format", output_format.value])
+            cmd.append("--verbose")  # Required by Claude Code for streaming JSON
+        elif output_format != OutputFormat.TEXT:
             cmd.extend(["--output-format", output_format.value])
         
         if config.session_id:

@@ -7,12 +7,12 @@ Provides production-ready CLI with comprehensive error handling, configuration
 management, and operational features.
 
 Usage:
-    python claude_cli.py ask "What is Python?"
-    python claude_cli.py --config config.json ask "Generate code"
-    python claude_cli.py stream "Write a long explanation"
-    python claude_cli.py session --interactive
-    python claude_cli.py health
-    python claude_cli.py benchmark --queries queries.txt
+    python cli_tool.py ask "What is Python?"
+    python cli_tool.py --config config.json ask "Generate code"
+    python cli_tool.py stream "Write a long explanation"
+    python cli_tool.py session --interactive
+    python cli_tool.py health
+    python cli_tool.py benchmark --queries queries.txt
 """
 
 import argparse
