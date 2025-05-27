@@ -191,45 +191,41 @@ class ClaudeCLI:
                     if kwargs.get('verbose'):
                         print(f"⚠️  Parse Error: {event.get('message', 'Parse failed')}", file=sys.stderr)
                     
-                elif event_type == "message":
-                    content = event.get("content", "")
-                    if content:
-                        content_parts.append(content)
-                        print(content, end="", flush=True)
-                
-                # Handle different possible content formats
-                elif "content" in event:
-                    content = event.get("content", "")
-                    if content:
-                        content_parts.append(content)
-                        print(content, end="", flush=True)
-                
-                # Handle text events (common in streaming)
-                elif event_type == "text" or "text" in event:
-                    text = event.get("text", "")
-                    if text:
-                        content_parts.append(text)
-                        print(text, end="", flush=True)
-                
-                # Handle content_block events (Claude's format)
-                elif event_type == "content_block_delta":
-                    delta = event.get("delta", {})
-                    text = delta.get("text", "")
-                    if text:
-                        content_parts.append(text)
-                        print(text, end="", flush=True)
-                
-                # Handle assistant messages (from debug output)
-                elif event_type == "assistant":
-                    message = event.get("message", "")
-                    if message:
-                        content_parts.append(message)
-                        print(message, end="", flush=True)
-                        
-                elif event_type == "init":
+                # Handle user messages (though unlikely in streaming responses)
+                elif event_type == "user":
                     if kwargs.get('verbose'):
-                        session_id = event.get("session_id", "no-session")
-                        print(f"🚀 Session: {session_id}", file=sys.stderr)
+                        print(f"👤 User message received", file=sys.stderr)
+                
+                # Handle assistant messages according to Claude Code docs
+                elif event_type == "assistant":
+                    message = event.get("message", {})
+                    if isinstance(message, dict):
+                        # Extract content from the Anthropic SDK message format
+                        content = message.get("content", [])
+                        if isinstance(content, list):
+                            for item in content:
+                                if isinstance(item, dict) and item.get("type") == "text":
+                                    text = item.get("text", "")
+                                    if text:
+                                        content_parts.append(text)
+                                        print(text, end="", flush=True)
+                        elif isinstance(content, str):
+                            content_parts.append(content)
+                            print(content, end="", flush=True)
+                
+                        
+                elif event_type == "system":
+                    subtype = event.get("subtype", "")
+                    if subtype == "init":
+                        if kwargs.get('verbose'):
+                            session_id = event.get("session_id", "no-session")
+                            tools = event.get("tools", [])
+                            mcp_servers = event.get("mcp_servers", [])
+                            print(f"🚀 Session: {session_id}", file=sys.stderr)
+                            if tools:
+                                print(f"   Tools: {', '.join(tools[:5])}{'...' if len(tools) > 5 else ''}", file=sys.stderr)
+                            if mcp_servers:
+                                print(f"   MCP Servers: {', '.join([s['name'] for s in mcp_servers])}", file=sys.stderr)
                         
                 elif event_type == "result":
                     if kwargs.get('verbose'):
@@ -238,6 +234,14 @@ class ClaudeCLI:
                         stats = event.get("stats", {})
                         if stats:
                             print(f"📊 Stats: {stats}", file=sys.stderr)
+                
+                else:
+                    # Catch unhandled event types to prevent raw JSON output
+                    # Claude CLI sometimes outputs raw events that we need to suppress
+                    if kwargs.get('verbose'):
+                        print(f"[DEBUG] Unhandled event type: {event_type}", file=sys.stderr)
+                    # Suppress the raw event by not printing anything
+                    pass
             
             print()  # Final newline
             
@@ -245,7 +249,9 @@ class ClaudeCLI:
                 print(f"\n📊 Stream Stats:", file=sys.stderr)
                 print(f"   Events: {event_count}", file=sys.stderr)
                 print(f"   Errors: {error_count}", file=sys.stderr)
-                print(f"   Content: {len(''.join(content_parts))} chars", file=sys.stderr)
+                # Safely calculate content length by filtering only strings
+                string_parts = [part for part in content_parts if isinstance(part, str)]
+                print(f"   Content: {len(''.join(string_parts))} chars", file=sys.stderr)
             
             return 0 if error_count == 0 else 1
             

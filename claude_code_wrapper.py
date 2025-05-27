@@ -239,6 +239,11 @@ class ClaudeCodeConfig:
     max_turns: Optional[int] = None
     verbose: bool = False
     
+    # Streaming timeout settings (industry best practices)
+    streaming_idle_timeout: Optional[float] = 30.0  # Reset on each event
+    streaming_max_timeout: Optional[float] = 600.0  # 10 min absolute max
+    streaming_initial_timeout: Optional[float] = 60.0  # Time to first event
+    
     # Model selection
     model: Optional[str] = None  # opus, sonnet, haiku, or full model name
     
@@ -854,15 +859,49 @@ class ClaudeCodeWrapper:
                 env=self._build_env(config)
             )
             
-            # Set up timeout handling if configured
-            if config.timeout:
-                def timeout_handler():
-                    time.sleep(config.timeout)
-                    if process and process.poll() is None:
-                        self.logger.warning("Streaming process timed out, terminating")
-                        process.terminate()
+            # Set up activity-based timeout handling (industry best practice)
+            last_activity = time.time()
+            start_time = time.time()
+            timeout_thread = None
+            timeout_lock = threading.Lock()
+            
+            def activity_timeout_handler():
+                """Industry-standard activity-based timeout with three phases"""
+                nonlocal last_activity, process
                 
-                timeout_thread = threading.Thread(target=timeout_handler, daemon=True)
+                while True:
+                    with timeout_lock:
+                        current_time = time.time()
+                        time_since_start = current_time - start_time
+                        time_since_activity = current_time - last_activity
+                        
+                        # Phase 1: Initial timeout (time to first event)
+                        if time_since_start < config.streaming_initial_timeout and time_since_activity < config.streaming_initial_timeout:
+                            time.sleep(1)
+                            continue
+                        
+                        # Phase 2: Idle timeout (reset on each event)
+                        if time_since_activity > config.streaming_idle_timeout:
+                            if process and process.poll() is None:
+                                self.logger.warning(f"Streaming idle timeout after {time_since_activity:.1f}s, terminating")
+                                process.terminate()
+                                return
+                        
+                        # Phase 3: Absolute maximum timeout
+                        if time_since_start > config.streaming_max_timeout:
+                            if process and process.poll() is None:
+                                self.logger.warning(f"Streaming maximum timeout after {time_since_start:.1f}s, terminating")
+                                process.terminate()
+                                return
+                        
+                        # Check if process has completed
+                        if not process or process.poll() is not None:
+                            return
+                    
+                    time.sleep(1)  # Check every second
+            
+            if config.streaming_idle_timeout:
+                timeout_thread = threading.Thread(target=activity_timeout_handler, daemon=True)
                 timeout_thread.start()
             
             # Stream output with error handling
@@ -873,9 +912,19 @@ class ClaudeCodeWrapper:
                     try:
                         event = json.loads(line)
                         line_count += 1
+                        
+                        # Reset activity timer on each event (industry best practice)
+                        with timeout_lock:
+                            last_activity = time.time()
+                        
                         yield event
                     except json.JSONDecodeError as e:
                         self.logger.warning(f"Failed to parse streaming line: {line[:100]}...")
+                        
+                        # Reset activity timer even for parse errors
+                        with timeout_lock:
+                            last_activity = time.time()
+                        
                         yield {
                             "type": "parse_error",
                             "message": f"Invalid JSON in stream: {e}",
