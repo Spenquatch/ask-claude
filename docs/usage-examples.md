@@ -20,6 +20,31 @@ print(f"Response: {response.content}")
 print(f"Session ID: {response.session_id}")
 ```
 
+### Model Selection
+
+```python
+# Use specific model
+response = ask_claude("Complex reasoning task", model="opus")
+response = ask_claude("Quick question", model="haiku")
+
+# With temperature control
+response = ask_claude(
+    "Write creative content",
+    model="sonnet",
+    temperature=0.8
+)
+
+# Full generation control
+wrapper = ClaudeCodeWrapper()
+response = wrapper.ask(
+    "Generate code",
+    model="opus",
+    temperature=0.1,
+    max_tokens=2000,
+    top_p=0.95
+)
+```
+
 ### JSON Format Responses
 
 ```python

@@ -157,5 +157,73 @@
       "BATCH_SIZE": "large",
       "CACHE_ENABLED": "true"
     }
+  },
+  
+  "mcp_auto_approval_allowlist.json": {
+    "_comment": "Auto-approve only specific MCP tools",
+    "claude_binary": "claude",
+    "timeout": 60.0,
+    "mcp_config_path": "./mcp_config.json",
+    "mcp_auto_approval": {
+      "enabled": true,
+      "strategy": "allowlist",
+      "allowlist": [
+        "mcp__sequential-thinking__sequentialthinking",
+        "mcp__filesystem__read_file",
+        "mcp__filesystem__list_directory",
+        "mcp__database__query",
+        "mcp__web__fetch"
+      ]
+    }
+  },
+  
+  "mcp_auto_approval_patterns.json": {
+    "_comment": "Auto-approve based on regex patterns",
+    "claude_binary": "claude",
+    "timeout": 60.0,
+    "mcp_config_path": "./mcp_config.json",
+    "mcp_auto_approval": {
+      "enabled": true,
+      "strategy": "patterns",
+      "allow_patterns": [
+        "mcp__.*__read.*",
+        "mcp__.*__list.*",
+        "mcp__.*__get.*",
+        "mcp__.*__query.*",
+        "mcp__.*__fetch.*"
+      ],
+      "deny_patterns": [
+        "mcp__.*__write.*",
+        "mcp__.*__delete.*",
+        "mcp__.*__update.*",
+        "mcp__.*__modify.*",
+        "mcp__.*__admin.*"
+      ]
+    }
+  },
+  
+  "mcp_auto_approval_secure.json": {
+    "_comment": "Secure configuration with minimal auto-approval",
+    "claude_binary": "claude",
+    "timeout": 45.0,
+    "mcp_config_path": "./mcp_config.json",
+    "mcp_auto_approval": {
+      "enabled": true,
+      "strategy": "allowlist",
+      "allowlist": [
+        "mcp__filesystem__read_file",
+        "mcp__filesystem__list_directory"
+      ]
+    },
+    "allowed_tools": [
+      "Python(import,def,class)",
+      "mcp__filesystem__read_file",
+      "mcp__filesystem__list_directory"
+    ],
+    "disallowed_tools": [
+      "Bash",
+      "mcp__admin__*",
+      "mcp__system__*"
+    ]
   }
 }

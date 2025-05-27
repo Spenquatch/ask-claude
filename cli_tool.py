@@ -97,6 +97,27 @@ class ClaudeCLI:
             print(f"❌ Initialization Error: {e}", file=sys.stderr)
             return False
     
+    def _build_approval_config(self, args) -> Optional[Dict[str, Any]]:
+        """Build MCP auto-approval configuration from command line arguments."""
+        if not hasattr(args, 'approval_strategy') or not args.approval_strategy:
+            return None
+        
+        approval_config = {
+            'enabled': True,
+            'strategy': args.approval_strategy
+        }
+        
+        if args.approval_strategy == 'allowlist' and hasattr(args, 'approval_allowlist'):
+            approval_config['allowlist'] = args.approval_allowlist or []
+        
+        if args.approval_strategy == 'patterns':
+            if hasattr(args, 'approval_allow_patterns') and args.approval_allow_patterns:
+                approval_config['allow_patterns'] = args.approval_allow_patterns
+            if hasattr(args, 'approval_deny_patterns') and args.approval_deny_patterns:
+                approval_config['deny_patterns'] = args.approval_deny_patterns
+        
+        return approval_config
+    
     def cmd_ask(self, query: str, output_format: str = "text", **kwargs) -> int:
         """Handle ask command."""
         if not query.strip():
@@ -157,6 +178,10 @@ class ClaudeCLI:
                 event_count += 1
                 event_type = event.get("type", "unknown")
                 
+                # Debug: log event types we're seeing (commented out to avoid slowing down)
+                # if kwargs.get('verbose'):
+                #     print(f"[DEBUG] Event type: {event_type}, Keys: {list(event.keys())}", file=sys.stderr)
+                
                 if event_type == "error":
                     error_count += 1
                     print(f"❌ Stream Error: {event.get('message', 'Unknown')}", file=sys.stderr)
@@ -171,6 +196,35 @@ class ClaudeCLI:
                     if content:
                         content_parts.append(content)
                         print(content, end="", flush=True)
+                
+                # Handle different possible content formats
+                elif "content" in event:
+                    content = event.get("content", "")
+                    if content:
+                        content_parts.append(content)
+                        print(content, end="", flush=True)
+                
+                # Handle text events (common in streaming)
+                elif event_type == "text" or "text" in event:
+                    text = event.get("text", "")
+                    if text:
+                        content_parts.append(text)
+                        print(text, end="", flush=True)
+                
+                # Handle content_block events (Claude's format)
+                elif event_type == "content_block_delta":
+                    delta = event.get("delta", {})
+                    text = delta.get("text", "")
+                    if text:
+                        content_parts.append(text)
+                        print(text, end="", flush=True)
+                
+                # Handle assistant messages (from debug output)
+                elif event_type == "assistant":
+                    message = event.get("message", "")
+                    if message:
+                        content_parts.append(message)
+                        print(message, end="", flush=True)
                         
                 elif event_type == "init":
                     if kwargs.get('verbose'):
@@ -468,17 +522,61 @@ Examples:
     ask_parser.add_argument("--session-id", help="Resume specific session")
     ask_parser.add_argument("--continue", action="store_true", help="Continue last session")
     ask_parser.add_argument("--show-metadata", action="store_true", help="Show response metadata")
+    ask_parser.add_argument("--mcp-config", type=Path, help="MCP servers configuration file")
+    
+    # MCP Auto-approval options
+    ask_parser.add_argument("--approval-strategy", 
+                          choices=['allowlist', 'patterns', 'all', 'none'],
+                          help='MCP tool approval strategy')
+    ask_parser.add_argument("--approval-allowlist", 
+                          nargs='+',
+                          help='List of allowed MCP tools')
+    ask_parser.add_argument("--approval-allow-patterns", 
+                          nargs='+',
+                          help='Regex patterns for allowed tools')
+    ask_parser.add_argument("--approval-deny-patterns", 
+                          nargs='+',
+                          help='Regex patterns for denied tools')
     
     # Stream command
     stream_parser = subparsers.add_parser("stream", help="Stream a response")
     stream_parser.add_argument("query", help="Query to stream from Claude")
     stream_parser.add_argument("--timeout", type=float, help="Timeout in seconds")
     stream_parser.add_argument("--show-stats", action="store_true", help="Show streaming statistics")
+    stream_parser.add_argument("--mcp-config", type=Path, help="MCP servers configuration file")
+    
+    # MCP Auto-approval options
+    stream_parser.add_argument("--approval-strategy", 
+                             choices=['allowlist', 'patterns', 'all', 'none'],
+                             help='MCP tool approval strategy')
+    stream_parser.add_argument("--approval-allowlist", 
+                             nargs='+',
+                             help='List of allowed MCP tools')
+    stream_parser.add_argument("--approval-allow-patterns", 
+                             nargs='+',
+                             help='Regex patterns for allowed tools')
+    stream_parser.add_argument("--approval-deny-patterns", 
+                             nargs='+',
+                             help='Regex patterns for denied tools')
     
     # Session command
     session_parser = subparsers.add_parser("session", help="Interactive session")
     session_parser.add_argument("--interactive", "-i", action="store_true", help="Interactive mode")
     session_parser.add_argument("--max-turns", type=int, help="Maximum session turns")
+    
+    # MCP Auto-approval options
+    session_parser.add_argument("--approval-strategy", 
+                              choices=['allowlist', 'patterns', 'all', 'none'],
+                              help='MCP tool approval strategy')
+    session_parser.add_argument("--approval-allowlist", 
+                              nargs='+',
+                              help='List of allowed MCP tools')
+    session_parser.add_argument("--approval-allow-patterns", 
+                              nargs='+',
+                              help='Regex patterns for allowed tools')
+    session_parser.add_argument("--approval-deny-patterns", 
+                              nargs='+',
+                              help='Regex patterns for denied tools')
     
     # Health command
     subparsers.add_parser("health", help="Check wrapper health")
@@ -509,10 +607,31 @@ def main():
     elif args.verbose:
         cli.logger.setLevel(logging.DEBUG)
     
-    # Load configuration
-    cli.load_config(args.config)
+    # Build configuration from all sources
+    config_dict = {}
     
-    # Initialize wrapper
+    # Load base config from file if provided
+    if args.config and args.config.exists():
+        try:
+            with open(args.config) as f:
+                config_dict = json.load(f)
+        except Exception as e:
+            print(f"❌ Failed to load config: {e}", file=sys.stderr)
+            return 1
+    
+    # Add MCP config if provided
+    if hasattr(args, 'mcp_config') and args.mcp_config:
+        config_dict['mcp_config_path'] = args.mcp_config  # Already a Path from argparse
+    
+    # Add approval config if provided  
+    approval_config = cli._build_approval_config(args)
+    if approval_config:
+        config_dict['mcp_auto_approval'] = approval_config
+    
+    # Load configuration with all settings
+    cli.config = ClaudeCodeConfig.from_dict(config_dict) if config_dict else ClaudeCodeConfig()
+    
+    # Initialize wrapper with complete config
     if not cli.initialize_wrapper(args.verbose):
         return 1
     
@@ -545,6 +664,11 @@ def main():
             kwargs = {'verbose': args.verbose}
             if args.max_turns:
                 kwargs['max_turns'] = args.max_turns
+            
+            # Add approval config if provided
+            approval_config = cli._build_approval_config(args)
+            if approval_config:
+                kwargs['mcp_auto_approval'] = approval_config
             
             return cli.cmd_session(args.interactive, **kwargs)
             
