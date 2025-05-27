@@ -92,19 +92,6 @@ When working on tests, these issues need to be addressed:
 5. **CLI Output Parsing**: Test how it parses JSON output from the Claude CLI
 6. **Subprocess Execution**: Test how it handles the CLI process lifecycle
 
-## MCP Integration Notes (Important!)
-
-Based on testing (May 2025), there's a limitation with Claude Code's MCP handling:
-- MCP servers configured via `claude mcp add` show as "connected" in the CLI
-- But they're not accessible when Claude Code runs in non-interactive/piped mode
-- **Current Workaround**: Use JSON config files (e.g., `--mcp-config file.json`) for reliable MCP access
-- This appears to be a Claude Code CLI limitation, not our wrapper
-
-When implementing MCP:
-1. Check available servers with `wrapper.list_available_mcp_servers()`
-2. Prefer JSON configuration for reliability in production
-3. Always test MCP tool availability before relying on it
-4. Implement fallback strategies for when MCP tools aren't accessible
 
 ### MCP Auto-Approval System
 

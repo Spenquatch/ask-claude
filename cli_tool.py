@@ -178,10 +178,6 @@ class ClaudeCLI:
                 event_count += 1
                 event_type = event.get("type", "unknown")
                 
-                # Debug: log event types we're seeing (commented out to avoid slowing down)
-                # if kwargs.get('verbose'):
-                #     print(f"[DEBUG] Event type: {event_type}, Keys: {list(event.keys())}", file=sys.stderr)
-                
                 if event_type == "error":
                     error_count += 1
                     print(f"❌ Stream Error: {event.get('message', 'Unknown')}", file=sys.stderr)
@@ -238,8 +234,6 @@ class ClaudeCLI:
                 else:
                     # Catch unhandled event types to prevent raw JSON output
                     # Claude CLI sometimes outputs raw events that we need to suppress
-                    if kwargs.get('verbose'):
-                        print(f"[DEBUG] Unhandled event type: {event_type}", file=sys.stderr)
                     # Suppress the raw event by not printing anything
                     pass
             

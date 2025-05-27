@@ -2,6 +2,7 @@ import pytest
 import json
 import tempfile
 import os
+from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from io import StringIO
 import sys
@@ -145,7 +146,7 @@ class TestClaudeCLI:
         assert "Retries: 1" in output
         assert "Exit Code: 0" in output
     
-    @patch('claude_code_wrapper.ClaudeCodeWrapper')
+    @patch('cli_tool.ClaudeCodeWrapper')
     def test_handle_ask(self, mock_wrapper_class, cli):
         """Test ask command handler"""
         # Setup mock
@@ -177,7 +178,7 @@ class TestClaudeCLI:
             result = cli.handle_ask(args)
             assert result == 0
     
-    @patch('claude_code_wrapper.ClaudeCodeWrapper')
+    @patch('cli_tool.ClaudeCodeWrapper')
     def test_handle_ask_json(self, mock_wrapper_class, cli):
         """Test ask command with JSON output"""
         mock_wrapper = Mock()
@@ -203,7 +204,7 @@ class TestClaudeCLI:
             printed_json = mock_stdout.getvalue()
             assert json.loads(printed_json) == {"result": "success"}
     
-    @patch('claude_code_wrapper.ClaudeCodeWrapper')
+    @patch('cli_tool.ClaudeCodeWrapper')
     def test_handle_stream(self, mock_wrapper_class, cli):
         """Test stream command handler"""
         mock_wrapper = Mock()
@@ -227,7 +228,7 @@ class TestClaudeCLI:
             assert "chunk2" in output
             assert "chunk3" in output
     
-    @patch('claude_code_wrapper.ClaudeCodeWrapper')
+    @patch('cli_tool.ClaudeCodeWrapper')
     def test_handle_session_interactive(self, mock_wrapper_class, cli):
         """Test interactive session"""
         mock_wrapper = Mock()
@@ -257,7 +258,7 @@ class TestClaudeCLI:
                 result = cli.handle_session(args)
                 assert result == 0
     
-    @patch('claude_code_wrapper.ClaudeCodeWrapper')
+    @patch('cli_tool.ClaudeCodeWrapper')
     def test_handle_session_list(self, mock_wrapper_class, cli):
         """Test listing sessions"""
         mock_wrapper = Mock()
@@ -286,7 +287,7 @@ class TestClaudeCLI:
             assert "session1" in output
             assert "3 messages" in output
     
-    @patch('claude_code_wrapper.ClaudeCodeWrapper')
+    @patch('cli_tool.ClaudeCodeWrapper')
     def test_handle_health(self, mock_wrapper_class, cli):
         """Test health check command"""
         mock_wrapper = Mock()
@@ -314,7 +315,7 @@ class TestClaudeCLI:
             assert "healthy" in output
             assert "Total Requests: 10" in output
     
-    @patch('claude_code_wrapper.ClaudeCodeWrapper')
+    @patch('cli_tool.ClaudeCodeWrapper')
     @patch('time.time')
     def test_handle_benchmark(self, mock_time, mock_wrapper_class, cli):
         """Test benchmark command"""
@@ -423,7 +424,7 @@ class TestCLIIntegration:
             
             cli = ClaudeCLI()
             
-            with patch('claude_code_wrapper.ClaudeCodeWrapper') as mock_wrapper_class:
+            with patch('cli_tool.ClaudeCodeWrapper') as mock_wrapper_class:
                 mock_wrapper = Mock()
                 mock_wrapper.ask.return_value = ClaudeCodeResponse(
                     content="Response",
@@ -459,7 +460,7 @@ class TestCLIIntegration:
         
         cli = ClaudeCLI()
         
-        with patch('claude_code_wrapper.ClaudeCodeWrapper') as mock_wrapper_class:
+        with patch('cli_tool.ClaudeCodeWrapper') as mock_wrapper_class:
             mock_wrapper = Mock()
             mock_wrapper.ask.side_effect = Exception("API Error")
             mock_wrapper_class.return_value = mock_wrapper
@@ -468,6 +469,205 @@ class TestCLIIntegration:
                 result = cli.handle_ask(args)
                 assert result == 1
                 assert "API Error" in mock_stderr.getvalue()
+
+
+class TestMCPApprovalCLI:
+    """Test MCP auto-approval CLI functionality"""
+    
+    def test_approval_flags_parsing(self):
+        """Test parsing of approval-related CLI flags"""
+        parser = create_parser()
+        
+        # Test with allowlist strategy
+        args = parser.parse_args([
+            'ask', 'Test',
+            '--mcp-config', 'mcp.json',
+            '--approval-strategy', 'allowlist',
+            '--approval-allowlist', 'tool1', 'tool2'
+        ])
+        assert args.approval_strategy == 'allowlist'
+        assert args.approval_allowlist == ['tool1', 'tool2']
+        
+        # Test with patterns strategy
+        args = parser.parse_args([
+            'ask', 'Test',
+            '--approval-strategy', 'patterns',
+            '--approval-allow-patterns', '.*read.*', '.*list.*',
+            '--approval-deny-patterns', '.*write.*'
+        ])
+        assert args.approval_strategy == 'patterns'
+        assert args.approval_allow_patterns == ['.*read.*', '.*list.*']
+        assert args.approval_deny_patterns == ['.*write.*']
+        
+        # Test with all strategy
+        args = parser.parse_args([
+            'ask', 'Test',
+            '--approval-strategy', 'all'
+        ])
+        assert args.approval_strategy == 'all'
+    
+    def test_approval_config_construction(self):
+        """Test that approval config is properly constructed"""
+        cli = ClaudeCLI()
+        
+        # Mock args with approval settings
+        args = Mock()
+        args.query = "Test"  # Changed from prompt to query
+        args.mcp_config = Path('mcp.json')  # Convert to Path
+        args.approval_strategy = 'allowlist'
+        args.approval_allowlist = ['mcp__test__tool1', 'mcp__test__tool2']
+        args.approval_allow_patterns = None
+        args.approval_deny_patterns = None
+        args.format = 'text'  # Added format
+        args.timeout = None
+        args.max_turns = None
+        args.session_id = None
+        args.show_metadata = False
+        
+        # Build approval config
+        approval_config = cli._build_approval_config(args)
+        config_dict = {}
+        if approval_config:
+            config_dict['mcp_auto_approval'] = approval_config
+        cli.config = ClaudeCodeConfig.from_dict(config_dict)
+        
+        with patch('cli_tool.ClaudeCodeWrapper') as mock_wrapper_class:
+            mock_wrapper = Mock()
+            mock_response = Mock()
+            mock_response.content = "Test response"
+            mock_response.is_error = False
+            mock_wrapper.run.return_value = mock_response
+            mock_wrapper_class.return_value = mock_wrapper
+            
+            # Initialize wrapper first
+            cli.wrapper = mock_wrapper
+            
+            result = cli.cmd_ask(args.query, args.format, show_metadata=args.show_metadata)
+            
+            # Verify wrapper.run was called
+            assert mock_wrapper.run.called
+            # Verify config has correct approval settings
+            assert cli.config.mcp_auto_approval['enabled'] == True
+            assert cli.config.mcp_auto_approval['strategy'] == 'allowlist'
+            assert cli.config.mcp_auto_approval['allowlist'] == ['mcp__test__tool1', 'mcp__test__tool2']
+    
+    def test_stream_command_with_approval(self):
+        """Test stream command with approval flags"""
+        parser = create_parser()
+        args = parser.parse_args([
+            'stream', 'Test query',
+            '--mcp-config', 'mcp.json',
+            '--approval-strategy', 'all'
+        ])
+        
+        cli = ClaudeCLI()
+        
+        # Build approval config
+        approval_config = cli._build_approval_config(args)
+        config_dict = {}
+        if approval_config:
+            config_dict['mcp_auto_approval'] = approval_config
+        cli.config = ClaudeCodeConfig.from_dict(config_dict)
+        
+        with patch('cli_tool.ClaudeCodeWrapper') as mock_wrapper_class:
+            mock_wrapper = Mock()
+            # Mock streaming response
+            mock_wrapper.run_streaming.return_value = [
+                {"type": "system", "subtype": "init", "session_id": "123"},
+                {"type": "assistant", "message": {"content": [{"type": "text", "text": "Hello"}]}},
+                {"type": "result", "subtype": "success"}
+            ]
+            mock_wrapper_class.return_value = mock_wrapper
+            
+            # Initialize wrapper
+            cli.wrapper = mock_wrapper
+            
+            result = cli.cmd_stream(args.query)  # Pass query as string, not args
+            assert result == 0
+            
+            # Verify config has approval settings
+            assert cli.config.mcp_auto_approval['enabled'] == True
+            assert cli.config.mcp_auto_approval['strategy'] == 'all'
+    
+    def test_pattern_approval_config(self):
+        """Test pattern-based approval configuration"""
+        cli = ClaudeCLI()
+        
+        args = Mock()
+        args.query = "Test"  # Changed from prompt to query
+        args.approval_strategy = 'patterns'
+        args.approval_allow_patterns = ['mcp__.*__read.*', 'mcp__.*__list.*']
+        args.approval_deny_patterns = ['mcp__.*__admin.*']
+        args.approval_allowlist = None
+        args.mcp_config = None
+        args.format = 'text'  # Added format
+        args.timeout = None
+        args.max_turns = None
+        args.session_id = None
+        args.show_metadata = False
+        
+        # Build approval config
+        approval_config = cli._build_approval_config(args)
+        config_dict = {'mcp_auto_approval': approval_config}
+        cli.config = ClaudeCodeConfig.from_dict(config_dict)
+        
+        with patch('cli_tool.ClaudeCodeWrapper') as mock_wrapper_class:
+            mock_wrapper = Mock()
+            mock_response = Mock()
+            mock_response.content = "Test"
+            mock_response.is_error = False
+            mock_wrapper.run.return_value = mock_response
+            mock_wrapper_class.return_value = mock_wrapper
+            
+            # Initialize wrapper
+            cli.wrapper = mock_wrapper
+            
+            cli.cmd_ask(args.query, args.format, show_metadata=args.show_metadata)
+            
+            # Verify config has correct approval settings
+            assert cli.config.mcp_auto_approval['strategy'] == 'patterns'
+            assert cli.config.mcp_auto_approval['allow_patterns'] == ['mcp__.*__read.*', 'mcp__.*__list.*']
+            assert cli.config.mcp_auto_approval['deny_patterns'] == ['mcp__.*__admin.*']
+    
+    def test_no_approval_strategy(self):
+        """Test that no approval config is set when strategy is not provided"""
+        cli = ClaudeCLI()
+        
+        args = Mock()
+        args.query = "Test"  # Changed from prompt to query
+        args.approval_strategy = None
+        args.approval_allowlist = None
+        args.approval_allow_patterns = None
+        args.approval_deny_patterns = None
+        args.mcp_config = None
+        args.format = 'text'  # Added format
+        args.timeout = None
+        args.max_turns = None
+        args.session_id = None
+        args.show_metadata = False
+        
+        # Build approval config (should return None)
+        approval_config = cli._build_approval_config(args)
+        assert approval_config is None
+        
+        # Use default config
+        cli.config = ClaudeCodeConfig()
+        
+        with patch('cli_tool.ClaudeCodeWrapper') as mock_wrapper_class:
+            mock_wrapper = Mock()
+            mock_response = Mock()
+            mock_response.content = "Test"
+            mock_response.is_error = False
+            mock_wrapper.run.return_value = mock_response
+            mock_wrapper_class.return_value = mock_wrapper
+            
+            # Initialize wrapper
+            cli.wrapper = mock_wrapper
+            
+            cli.cmd_ask(args.query, args.format, show_metadata=args.show_metadata)
+            
+            # Verify config has empty mcp_auto_approval
+            assert cli.config.mcp_auto_approval == {}
 
 
 if __name__ == "__main__":

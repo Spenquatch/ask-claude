@@ -600,4 +600,95 @@ health = service.get_health()
 print(f"Health: {health}")
 ```
 
-This comprehensive set of examples covers most common usage patterns for the Claude Code SDK Wrapper, from basic queries to production-ready services.
+## MCP Auto-Approval Examples
+
+### Basic Auto-Approval
+
+```python
+from claude_code_wrapper import ClaudeCodeWrapper, ClaudeCodeConfig
+
+# Auto-approve all MCP tools (development)
+config = ClaudeCodeConfig(
+    mcp_config_path=Path("mcp-servers.json"),
+    mcp_auto_approval={
+        "enabled": True,
+        "strategy": "all"
+    }
+)
+wrapper = ClaudeCodeWrapper(config)
+
+# No manual approval needed!
+response = wrapper.ask("Use the filesystem tool to read README.md")
+```
+
+### Allowlist-Based Approval
+
+```python
+# Only approve specific tools
+config = ClaudeCodeConfig(
+    mcp_config_path=Path("mcp-servers.json"),
+    mcp_auto_approval={
+        "enabled": True,
+        "strategy": "allowlist",
+        "allowlist": [
+            "mcp__filesystem__read_file",
+            "mcp__filesystem__list_directory",
+            "mcp__database__query"
+        ]
+    }
+)
+
+# These tools will be auto-approved
+response = wrapper.ask("Read all Python files in the src directory")
+```
+
+### Pattern-Based Approval
+
+```python
+# Approve based on patterns (read-only operations)
+config = ClaudeCodeConfig(
+    mcp_config_path=Path("mcp-servers.json"),
+    mcp_auto_approval={
+        "enabled": True,
+        "strategy": "patterns",
+        "allow_patterns": [
+            "mcp__.*__read.*",
+            "mcp__.*__list.*",
+            "mcp__.*__get.*",
+            "mcp__.*__query.*"
+        ],
+        "deny_patterns": [
+            "mcp__.*__write.*",
+            "mcp__.*__delete.*",
+            "mcp__.*__execute.*",
+            "mcp__.*__admin.*"
+        ]
+    }
+)
+
+# Read operations auto-approved, write operations denied
+response = wrapper.ask("Analyze the codebase structure")
+```
+
+### CLI Usage with Auto-Approval
+
+```bash
+# Allow all tools
+python cli_tool.py ask "Use sequential thinking to plan a project" \
+    --mcp-config mcp-servers.json \
+    --approval-strategy all
+
+# Allowlist specific tools
+python cli_tool.py stream "Read and summarize the documentation" \
+    --mcp-config mcp-servers.json \
+    --approval-strategy allowlist \
+    --approval-allowlist "mcp__filesystem__read_file" "mcp__filesystem__list_directory"
+
+# Pattern-based approval
+python cli_tool.py ask "Query the database for user stats" \
+    --mcp-config mcp-servers.json \
+    --approval-strategy patterns \
+    --approval-allow-patterns "mcp__.*__query.*" "mcp__.*__read.*"
+```
+
+This comprehensive set of examples covers most common usage patterns for the Claude Code SDK Wrapper, from basic queries to production-ready services with MCP auto-approval.

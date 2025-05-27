@@ -190,6 +190,12 @@ ClaudeCodeConfig(
 ##### MCP Configuration
 - `mcp_config_path` (Optional[Path]): MCP configuration file path (default: None)
 - `permission_prompt_tool` (Optional[str]): MCP permission tool (default: None)
+- `mcp_auto_approval` (Dict[str, Any]): Auto-approval configuration (default: {})
+  - `enabled` (bool): Enable auto-approval
+  - `strategy` (str): Approval strategy ("all", "none", "allowlist", "patterns")
+  - `allowlist` (List[str]): Tools to approve (for "allowlist" strategy)
+  - `allow_patterns` (List[str]): Regex patterns to allow (for "patterns" strategy)
+  - `deny_patterns` (List[str]): Regex patterns to deny (for "patterns" strategy)
 
 ##### Environment
 - `working_directory` (Optional[Path]): Execution directory (default: None)

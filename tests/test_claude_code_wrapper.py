@@ -6,6 +6,7 @@ import time
 import subprocess
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
+from pathlib import Path
 
 # Add parent directory to path for imports
 import sys
@@ -594,6 +595,229 @@ class TestIntegration:
             assert "hello" in full_response
         except Exception as e:
             pytest.skip(f"Streaming failed: {e}")
+
+
+class TestMCPAutoApproval:
+    """Test MCP auto-approval functionality"""
+    
+    def test_auto_approval_config_parsing(self):
+        """Test parsing of auto-approval configuration"""
+        config = ClaudeCodeConfig(
+            mcp_auto_approval={
+                "enabled": True,
+                "strategy": "allowlist",
+                "allowlist": ["tool1", "tool2"]
+            }
+        )
+        assert config.mcp_auto_approval["enabled"] == True
+        assert config.mcp_auto_approval["strategy"] == "allowlist"
+        assert config.mcp_auto_approval["allowlist"] == ["tool1", "tool2"]
+    
+    def test_auto_approval_disabled_by_default(self):
+        """Test that auto-approval is disabled by default"""
+        config = ClaudeCodeConfig()
+        assert config.mcp_auto_approval == {}
+    
+    def test_setup_approval_server_creates_config(self):
+        """Test that _setup_approval_server creates proper config"""
+        # Create test MCP config file
+        test_mcp_config = {"mcpServers": {"test": {"command": "test"}}}
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(test_mcp_config, f)
+            test_config_path = f.name
+        
+        try:
+            # Create config with auto-approval
+            config = ClaudeCodeConfig(
+                mcp_config_path=Path(test_config_path),
+                mcp_auto_approval={
+                    "enabled": True,
+                    "strategy": "all"
+                }
+            )
+            
+            # Create wrapper instance (don't initialize to avoid subprocess calls)
+            import logging
+            wrapper = ClaudeCodeWrapper.__new__(ClaudeCodeWrapper)
+            wrapper.logger = logging.getLogger(__name__)
+            
+            # Call internal method
+            temp_config_path = wrapper._setup_approval_server(config)
+            
+            # Verify temp config was created
+            assert temp_config_path is not None
+            assert os.path.exists(temp_config_path)
+            
+            # Read and verify the temp config
+            with open(temp_config_path, 'r') as tf:
+                config_data = json.load(tf)
+            
+            assert "mcpServers" in config_data
+            assert "approval-server" in config_data["mcpServers"]
+            assert "test" in config_data["mcpServers"]  # Original server preserved
+            
+            # Check approval server configuration
+            approval_server = config_data["mcpServers"]["approval-server"]
+            assert "env" in approval_server
+            assert "APPROVAL_STRATEGY_CONFIG" in approval_server["env"]
+            
+            # Verify strategy config
+            strategy_config = json.loads(approval_server["env"]["APPROVAL_STRATEGY_CONFIG"])
+            assert strategy_config["type"] == "all"
+            
+            # Cleanup temp file
+            os.unlink(temp_config_path)
+            
+        finally:
+            # Cleanup test file
+            os.unlink(test_config_path)
+    
+    def test_approval_strategy_with_allowlist(self):
+        """Test that approval strategy is correctly configured with allowlist"""
+        config = ClaudeCodeConfig(
+            mcp_auto_approval={
+                "enabled": True,
+                "strategy": "allowlist",
+                "allowlist": ["mcp__test__tool1", "mcp__test__tool2"]
+            }
+        )
+        
+        # Create wrapper instance without initialization
+        import logging
+        wrapper = ClaudeCodeWrapper.__new__(ClaudeCodeWrapper)
+        wrapper.logger = logging.getLogger(__name__)
+        
+        # Test _setup_approval_server
+        temp_config = wrapper._setup_approval_server(config)
+        
+        if temp_config:
+            # Read the temp config
+            with open(temp_config, 'r') as f:
+                mcp_config = json.load(f)
+            
+            # Verify approval server is configured
+            assert "approval-server" in mcp_config["mcpServers"]
+            approval_env = mcp_config["mcpServers"]["approval-server"]["env"]
+            
+            # Check strategy config
+            strategy_config = json.loads(approval_env["APPROVAL_STRATEGY_CONFIG"])
+            assert strategy_config["type"] == "allowlist"
+            assert strategy_config["allowlist"] == ["mcp__test__tool1", "mcp__test__tool2"]
+            
+            # Cleanup
+            os.unlink(temp_config)
+    
+    def test_all_approval_strategies(self):
+        """Test all approval strategy types are valid"""
+        strategies = ["all", "none", "allowlist", "patterns"]
+        
+        for strategy in strategies:
+            config = ClaudeCodeConfig(
+                mcp_auto_approval={
+                    "enabled": True,
+                    "strategy": strategy
+                }
+            )
+            assert config.mcp_auto_approval["strategy"] == strategy
+    
+    def test_approval_with_patterns(self):
+        """Test pattern-based approval configuration"""
+        config = ClaudeCodeConfig(
+            mcp_auto_approval={
+                "enabled": True,
+                "strategy": "patterns",
+                "allow_patterns": ["mcp__.*__read.*", "mcp__.*__list.*"],
+                "deny_patterns": ["mcp__.*__admin.*", "mcp__.*__delete.*"]
+            }
+        )
+        
+        # Create wrapper instance without initialization
+        import logging
+        wrapper = ClaudeCodeWrapper.__new__(ClaudeCodeWrapper)
+        wrapper.logger = logging.getLogger(__name__)
+        
+        # Test _setup_approval_server
+        temp_config = wrapper._setup_approval_server(config)
+        
+        if temp_config:
+            # Read the temp config
+            with open(temp_config, 'r') as f:
+                mcp_config = json.load(f)
+            
+            # Verify approval server is configured
+            assert "approval-server" in mcp_config["mcpServers"]
+            approval_env = mcp_config["mcpServers"]["approval-server"]["env"]
+            
+            # Check strategy config
+            strategy_config = json.loads(approval_env["APPROVAL_STRATEGY_CONFIG"])
+            assert strategy_config["type"] == "patterns"
+            assert strategy_config["allow_patterns"] == ["mcp__.*__read.*", "mcp__.*__list.*"]
+            assert strategy_config["deny_patterns"] == ["mcp__.*__admin.*", "mcp__.*__delete.*"]
+            
+            # Cleanup
+            os.unlink(temp_config)
+    
+    def test_mcp_config_with_existing_servers(self):
+        """Test that existing MCP servers are preserved when adding approval"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            original_config = {
+                "mcpServers": {
+                    "filesystem": {
+                        "command": "mcp-filesystem",
+                        "args": ["/path"]
+                    }
+                }
+            }
+            json.dump(original_config, f)
+            f.flush()
+            
+            try:
+                config = ClaudeCodeConfig(
+                    mcp_config_path=Path(f.name),
+                    mcp_auto_approval={
+                        "enabled": True,
+                        "strategy": "all"
+                    }
+                )
+                wrapper = ClaudeCodeWrapper(config)
+                
+                # Create temp config
+                temp_config = wrapper._setup_approval_server(config)
+                
+                # Read the temp config
+                with open(temp_config, 'r') as tf:
+                    combined_config = json.load(tf)
+                
+                # Verify both servers exist
+                assert "filesystem" in combined_config["mcpServers"]
+                assert "approval-server" in combined_config["mcpServers"]
+                
+                # Cleanup temp file
+                os.unlink(temp_config)
+                
+            finally:
+                os.unlink(f.name)
+    
+    def test_approval_disabled_no_server_added(self):
+        """Test that approval server is not added when disabled"""
+        # Config with disabled auto-approval
+        config = ClaudeCodeConfig(
+            mcp_auto_approval={
+                "enabled": False,
+                "strategy": "all"
+            }
+        )
+        
+        # Create wrapper instance without initialization
+        import logging
+        wrapper = ClaudeCodeWrapper.__new__(ClaudeCodeWrapper)
+        wrapper.logger = logging.getLogger(__name__)
+        
+        # Test _setup_approval_server
+        temp_config = wrapper._setup_approval_server(config)
+        
+        # Should return None when disabled
+        assert temp_config is None
 
 
 if __name__ == "__main__":

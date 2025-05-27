@@ -14,6 +14,13 @@ Complete documentation for the Claude Code SDK Wrapper.
 - **[CLI Usage](cli-usage.md)** - Command-line interface guide
 - **[Error Handling](error-handling.md)** - Comprehensive error handling guide
 
+### Advanced Features
+- **[MCP Integration](mcp-integration.md)** - Model Context Protocol integration and auto-approval
+- **[Session Management](session-management.md)** - Advanced session management features
+- **[Caching Guide](caching-guide.md)** - Response caching for performance
+- **[Cache Comparison](cache-comparison.md)** - Caching strategies and best practices
+- **[Model Selection](model-selection.md)** - Choosing and configuring Claude models
+
 ### Production Deployment
 - **[Production Guide](production.md)** - Deploy in production environments
 
@@ -44,6 +51,11 @@ Complete documentation for the Claude Code SDK Wrapper.
 | [api-reference.md](api-reference.md) | Complete API documentation | Developers |
 | [cli-usage.md](cli-usage.md) | Command-line interface guide | All users |
 | [error-handling.md](error-handling.md) | Error handling patterns | Developers |
+| [mcp-integration.md](mcp-integration.md) | MCP setup and auto-approval | Developers |
+| [session-management.md](session-management.md) | Session features and patterns | Developers |
+| [caching-guide.md](caching-guide.md) | Response caching setup | Developers, DevOps |
+| [cache-comparison.md](cache-comparison.md) | Caching strategy comparison | Architects |
+| [model-selection.md](model-selection.md) | Model configuration guide | All users |
 | [production.md](production.md) | Production deployment guide | DevOps, SysAdmins |
 
 ## 🔍 Quick Lookup
@@ -52,6 +64,7 @@ Complete documentation for the Claude Code SDK Wrapper.
 - **Basic usage**: [Usage Examples - Basic Usage](usage-examples.md#basic-usage)
 - **Session management**: [Usage Examples - Session Management](usage-examples.md#session-management)
 - **Streaming responses**: [Usage Examples - Streaming Responses](usage-examples.md#streaming-responses)
+- **MCP auto-approval**: [MCP Integration - Auto-Approval](mcp-integration.md#mcp-auto-approval)
 - **Error handling**: [Error Handling Guide](error-handling.md)
 - **CLI commands**: [CLI Usage](cli-usage.md#commands)
 
@@ -83,6 +96,11 @@ Complete documentation for the Claude Code SDK Wrapper.
 | api-reference.md | ✅ Complete | Current | 100% |
 | cli-usage.md | ✅ Complete | Current | 100% |
 | error-handling.md | ✅ Complete | Current | 100% |
+| mcp-integration.md | ✅ Complete | Current | 100% |
+| session-management.md | ✅ Complete | Current | 100% |
+| caching-guide.md | ✅ Complete | Current | 100% |
+| cache-comparison.md | ✅ Complete | Current | 100% |
+| model-selection.md | ✅ Complete | Current | 100% |
 | production.md | ✅ Complete | Current | 100% |
 
 ## 🤝 Contributing to Documentation

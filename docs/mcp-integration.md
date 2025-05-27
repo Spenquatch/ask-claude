@@ -116,6 +116,62 @@ mcp_config = wrapper.create_mcp_config({
 wrapper.save_mcp_config(mcp_config, "my-mcp-config.json")
 ```
 
+## Auto-Approval for MCP Tools (New Feature)
+
+The Claude Code Wrapper now supports automatic approval of MCP tool usage, eliminating manual prompts during execution. This is especially useful for automation and CI/CD pipelines.
+
+### Quick Start
+
+```python
+# Auto-approve all MCP tools
+config = ClaudeCodeConfig(
+    mcp_config_path=Path("mcp-servers.json"),
+    mcp_auto_approval={
+        "enabled": True,
+        "strategy": "all"
+    }
+)
+
+# Auto-approve specific tools only
+config = ClaudeCodeConfig(
+    mcp_config_path=Path("mcp-servers.json"),
+    mcp_auto_approval={
+        "enabled": True,
+        "strategy": "allowlist",
+        "allowlist": ["mcp__filesystem__read_file", "mcp__deepwiki__fetch"]
+    }
+)
+```
+
+### Approval Strategies
+
+1. **`all`** - Approve all MCP tool requests automatically
+2. **`none`** - Deny all MCP tool requests (useful for testing)
+3. **`allowlist`** - Only approve tools in the allowlist
+4. **`patterns`** - Approve/deny based on regex patterns
+
+### CLI Usage
+
+```bash
+# Allow all tools
+python cli_tool.py ask "Analyze this codebase" \
+    --mcp-config mcp-servers.json \
+    --approval-strategy all
+
+# Allow specific tools
+python cli_tool.py ask "Read the README" \
+    --mcp-config mcp-servers.json \
+    --approval-strategy allowlist \
+    --approval-allowlist "mcp__filesystem__read_file"
+
+# Pattern-based approval
+python cli_tool.py ask "Query the database" \
+    --mcp-config mcp-servers.json \
+    --approval-strategy patterns \
+    --approval-allow-patterns "mcp__.*__read.*" "mcp__.*__query.*" \
+    --approval-deny-patterns "mcp__.*__write.*" "mcp__.*__delete.*"
+```
+
 ## Tool Permissions
 
 ### Understanding MCP Tool Names
@@ -375,6 +431,146 @@ class AuditedWrapper(ClaudeCodeWrapper):
         return response
 ```
 
+## MCP Auto-Approval
+
+MCP tools require approval before use by default. The auto-approval feature eliminates manual approval prompts by automatically approving or denying tools based on configured strategies.
+
+### How Auto-Approval Works
+
+The auto-approval system works by:
+1. Creating a special MCP approval server that implements the `permissions__approve` tool
+2. Configuring this server based on your chosen strategy (all, none, allowlist, or patterns)
+3. Claude calls this tool automatically when it needs to use other MCP tools
+4. The approval server instantly responds based on your configured rules
+
+This happens transparently - you won't see approval prompts, and Claude can use tools seamlessly.
+
+### Available Strategies
+
+#### 1. **Allow All Strategy** (Development)
+```python
+# Allow all tools - useful for development
+config = ClaudeCodeConfig(
+    mcp_auto_approval={
+        "enabled": True,
+        "strategy": "all"
+    }
+)
+```
+
+#### 2. **Deny All Strategy** (Maximum Security)
+```python
+# Deny all tools - maximum security
+config = ClaudeCodeConfig(
+    mcp_auto_approval={
+        "enabled": True,
+        "strategy": "none"
+    }
+)
+```
+
+#### 3. **Allowlist Strategy** (Recommended)
+```python
+# Only allow specific tools
+config = ClaudeCodeConfig(
+    mcp_auto_approval={
+        "enabled": True,
+        "strategy": "allowlist",
+        "allowlist": [
+            "mcp__filesystem__read_file",
+            "mcp__filesystem__list_directory",
+            "mcp__github__get_repository"
+        ]
+    }
+)
+```
+
+#### 4. **Pattern-Based Strategy** (Flexible)
+```python
+# Use regex patterns for approval
+config = ClaudeCodeConfig(
+    mcp_auto_approval={
+        "enabled": True,
+        "strategy": "patterns",
+        "allow_patterns": [
+            r"mcp__.*__read.*",      # Allow all read operations
+            r"mcp__.*__list.*",      # Allow all list operations
+            r"mcp__.*__get.*"        # Allow all get operations
+        ],
+        "deny_patterns": [
+            r"mcp__.*__delete.*",    # Deny all delete operations
+            r"mcp__.*__admin.*"      # Deny all admin operations
+        ]
+    }
+)
+```
+
+### CLI Usage
+
+```bash
+# Using allowlist strategy
+claude ask "Read the config file" \
+    --mcp-config mcp.json \
+    --approval-strategy allowlist \
+    --approval-allowlist mcp__filesystem__read_file
+
+# Using pattern strategy
+claude stream "Analyze the repository" \
+    --mcp-config mcp.json \
+    --approval-strategy patterns \
+    --approval-allow-patterns "mcp__.*__read.*" "mcp__.*__list.*" \
+    --approval-deny-patterns "mcp__.*__write.*"
+
+# Using allow all strategy (development)
+claude ask "Help me debug this" \
+    --mcp-config mcp.json \
+    --approval-strategy all
+```
+
+### Environment Variable Configuration
+
+```bash
+# Set approval strategy via environment
+export APPROVAL_STRATEGY=allowlist
+export APPROVAL_ALLOWLIST="mcp__filesystem__read_file,mcp__github__get_repository"
+
+# The configurable_approval_server.py reads these automatically
+```
+
+### Security Considerations for Auto-Approval
+
+```python
+# Development: Allow all for convenience
+dev_config = {
+    "mcp_auto_approval": {
+        "enabled": True,
+        "strategy": "all"
+    }
+}
+
+# Production: Strict allowlist
+prod_config = {
+    "mcp_auto_approval": {
+        "enabled": True,
+        "strategy": "allowlist",
+        "allowlist": [
+            "mcp__filesystem__read_file",
+            "mcp__database__query"  # Read-only operations
+        ]
+    }
+}
+
+# High-security: Pattern-based with explicit denies
+secure_config = {
+    "mcp_auto_approval": {
+        "enabled": True,
+        "strategy": "patterns",
+        "allow_patterns": ["mcp__.*__read.*", "mcp__.*__list.*"],
+        "deny_patterns": ["mcp__.*__write.*", "mcp__.*__delete.*", "mcp__.*__admin.*"]
+    }
+}
+```
+
 ## Troubleshooting
 
 ### Common Issues
@@ -401,6 +597,18 @@ print(f"Allowed tools: {wrapper.config.allowed_tools}")
 import shutil
 if not shutil.which("npx"):
     print("npx not found - install Node.js")
+```
+
+4. **Auto-Approval Not Working**
+```python
+# Check if approval server is configured
+wrapper.list_available_mcp_servers()  # Should show 'approval-server'
+
+# Verify approval configuration
+print(wrapper.config.mcp_auto_approval)
+
+# Test with verbose mode to see approval decisions
+config.verbose = True
 ```
 
 ### Debug Mode

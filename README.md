@@ -27,6 +27,7 @@ print(f"Session: {response.session_id}")
 - **🔧 CLI Tool**: Production-ready command-line interface
 - **📦 Zero Dependencies**: Uses only Python standard library
 - **🔄 Resilience**: Automatic retries with exponential backoff
+- **🤖 MCP Auto-Approval**: Programmatic approval of MCP tools without manual prompts
 
 ## 📋 Quick Links
 
@@ -35,6 +36,7 @@ print(f"Session: {response.session_id}")
 - [Usage Examples](docs/usage-examples.md)
 - [API Reference](docs/api-reference.md)
 - [CLI Documentation](docs/cli-usage.md)
+- [MCP Integration](docs/mcp-integration.md)
 - [Production Deployment](docs/production.md)
 - [Error Handling](docs/error-handling.md)
 
@@ -95,6 +97,62 @@ For production usage examples:
 
 ```bash
 python production_example.py
+```
+
+## 🤖 MCP Auto-Approval (New!)
+
+Enable automatic approval of MCP (Model Context Protocol) tools without manual prompts:
+
+```python
+from claude_code_wrapper import ClaudeCodeWrapper, ClaudeCodeConfig
+from pathlib import Path
+
+# Auto-approve all MCP tools (development)
+config = ClaudeCodeConfig(
+    mcp_config_path=Path("mcp-servers.json"),
+    mcp_auto_approval={
+        "enabled": True,
+        "strategy": "all"
+    }
+)
+
+# Auto-approve specific tools only (production)
+config = ClaudeCodeConfig(
+    mcp_config_path=Path("mcp-servers.json"),
+    mcp_auto_approval={
+        "enabled": True,
+        "strategy": "allowlist",
+        "allowlist": ["mcp__filesystem__read_file", "mcp__database__query"]
+    }
+)
+
+# Pattern-based approval (advanced)
+config = ClaudeCodeConfig(
+    mcp_config_path=Path("mcp-servers.json"),
+    mcp_auto_approval={
+        "enabled": True,
+        "strategy": "patterns",
+        "allow_patterns": ["mcp__.*__read.*", "mcp__.*__list.*"],
+        "deny_patterns": ["mcp__.*__write.*", "mcp__.*__delete.*"]
+    }
+)
+
+wrapper = ClaudeCodeWrapper(config)
+```
+
+### CLI Usage
+
+```bash
+# Auto-approve all tools
+python cli_tool.py ask "Analyze the codebase" \
+    --mcp-config mcp-servers.json \
+    --approval-strategy all
+
+# Allowlist specific tools
+python cli_tool.py stream "Read project documentation" \
+    --mcp-config mcp-servers.json \
+    --approval-strategy allowlist \
+    --approval-allowlist "mcp__filesystem__read_file" "mcp__filesystem__list_directory"
 ```
 
 ## 📁 Project Structure
