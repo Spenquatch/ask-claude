@@ -43,7 +43,7 @@ This guide covers the development setup, tools, and workflows for the Claude Cod
 ### Alternative: Traditional pip Installation
 ```bash
 pip install -e .                    # Install package in editable mode
-pip install pytest black ruff mypy  # Install dev dependencies manually
+pip install pytest ruff mypy        # Install dev dependencies manually
 pre-commit install
 ```
 
@@ -51,35 +51,22 @@ pre-commit install
 
 We maintain high code quality standards using automated tools:
 
-### 🎨 **Black** - Code Formatting
-- **Purpose**: Consistent, opinionated Python code formatting
-- **Configuration**: 88 character line length (Black default)
-- **Usage**:
-  ```bash
-  # With Poetry (recommended)
-  poetry run black ask_claude/
-  poetry run black examples/ tests/
-  poetry run black --check .    # Check without modifying
-
-  # Traditional
-  black ask_claude/
-  black examples/ tests/
-  ```
-
-### 🦀 **Ruff** - Linting and Import Sorting
-- **Purpose**: Fast Python linter replacing flake8, isort, and more
-- **Features**: Error detection, import sorting, code cleanup
+### 🦀 **Ruff** - Linting and Formatting
+- **Purpose**: Fast Python linter and formatter replacing black, flake8, isort, and more
+- **Features**: Error detection, import sorting, code cleanup, code formatting
 - **Configuration**: See `pyproject.toml` → `[tool.ruff]`
 - **Usage**:
   ```bash
   # With Poetry (recommended)
   poetry run ruff check ask_claude/        # Check for issues
   poetry run ruff check ask_claude/ --fix  # Auto-fix issues
-  poetry run ruff check .                  # Check entire project
+  poetry run ruff format ask_claude/       # Format code
+  poetry run ruff check . && poetry run ruff format .  # Check and format entire project
 
   # Traditional
   ruff check ask_claude/
   ruff check ask_claude/ --fix
+  ruff format ask_claude/
   ```
 
 ### 🔍 **mypy** - Static Type Checking
@@ -309,12 +296,12 @@ python examples/session_manager_demo.py
 2. **Pre-commit hook failures**:
    ```bash
    # With Poetry
-   poetry run pre-commit run black --all-files
    poetry run pre-commit run ruff --all-files
+   poetry run pre-commit run ruff-format --all-files
 
    # Traditional
-   pre-commit run black --all-files
    pre-commit run ruff --all-files
+   pre-commit run ruff-format --all-files
    ```
 
 3. **Python version conflicts**:

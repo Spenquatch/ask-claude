@@ -163,8 +163,7 @@ We welcome contributions! Please see our [Development Guide](docs/development.md
 
 **Code Quality Standards:**
 - ✅ 100% type safety with mypy
-- ✅ Code formatting with Black
-- ✅ Linting with Ruff
+- ✅ Code formatting and linting with Ruff
 - ✅ All tests must pass
 
 ## License
