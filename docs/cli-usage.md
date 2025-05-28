@@ -480,7 +480,7 @@ python cli_tool.py --verbose ask "Test query" 2>&1 | \
    # Check Claude installation
    which claude
    claude --version
-   
+
    # Use full path if needed
    python cli_tool.py --config config.json ask "Query"
    # where config.json contains: {"claude_binary": "/full/path/to/claude"}
@@ -497,7 +497,7 @@ python cli_tool.py --verbose ask "Test query" 2>&1 | \
    ```bash
    # Check Python path
    python -c "import sys; print(sys.path)"
-   
+
    # Ensure you're in the correct directory
    cd /path/to/ask_claude
    python cli_tool.py ask "Test"

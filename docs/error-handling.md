@@ -22,7 +22,7 @@ All wrapper exceptions inherit from this base class.
 
 ```python
 class ClaudeCodeError(Exception):
-    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.MEDIUM, 
+    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.MEDIUM,
                  context: Optional[Dict[str, Any]] = None)
 ```
 
@@ -75,7 +75,7 @@ try:
 except ClaudeCodeProcessError as e:
     print(f"Process failed with code {e.returncode}")
     print(f"Error output: {e.stderr}")
-    
+
     if e.returncode == 1:
         print("General Claude Code error")
     elif e.returncode == 2:
@@ -149,7 +149,7 @@ except ClaudeCodeConfigurationError as e:
 
 ```python
 from claude_code_wrapper import (
-    ClaudeCodeWrapper, 
+    ClaudeCodeWrapper,
     ClaudeCodeError,
     ClaudeCodeTimeoutError,
     ClaudeCodeProcessError
@@ -160,19 +160,19 @@ def safe_query(query: str) -> str:
     try:
         wrapper = ClaudeCodeWrapper()
         response = wrapper.run(query)
-        
+
         # Check response-level errors
         if response.is_error:
             return f"Response error: {response.error_type}"
-        
+
         return response.content
-        
+
     except ClaudeCodeTimeoutError:
         return "Request timed out. Please try a simpler question."
-        
+
     except ClaudeCodeProcessError as e:
         return f"Service temporarily unavailable (code {e.returncode})"
-        
+
     except ClaudeCodeError as e:
         return f"An error occurred: {e}"
 
@@ -191,7 +191,7 @@ logger = logging.getLogger(__name__)
 
 def robust_query(query: str, max_retries: int = 3) -> Optional[str]:
     """Execute query with comprehensive error handling and retries."""
-    
+
     for attempt in range(max_retries):
         try:
             # Configure wrapper with appropriate settings
@@ -200,65 +200,65 @@ def robust_query(query: str, max_retries: int = 3) -> Optional[str]:
                 max_retries=1,  # Handle retries manually
                 verbose=attempt > 0  # Enable verbose logging on retries
             )
-            
+
             wrapper = ClaudeCodeWrapper(config)
             response = wrapper.run(query)
-            
+
             # Check for response-level errors
             if response.is_error:
                 error_msg = f"Response error: {response.error_type}"
                 if response.error_subtype:
                     error_msg += f" ({response.error_subtype})"
-                
+
                 logger.warning(f"Attempt {attempt + 1}: {error_msg}")
-                
+
                 # Some errors are retryable, others are not
                 if response.error_type in ["timeout", "rate_limit", "server_error"]:
                     if attempt < max_retries - 1:
                         time.sleep(2 ** attempt)  # Exponential backoff
                         continue
-                
+
                 return None
-            
+
             # Success
             logger.info(f"Query succeeded on attempt {attempt + 1}")
             return response.content
-            
+
         except ClaudeCodeTimeoutError as e:
             logger.warning(f"Attempt {attempt + 1} timed out after {e.timeout_duration}s")
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)
                 continue
-            
+
         except ClaudeCodeProcessError as e:
             logger.error(f"Attempt {attempt + 1} process error: {e.returncode}")
-            
+
             # Some process errors are retryable
             if e.returncode in [2, 124]:  # Argument errors, timeout
                 if attempt < max_retries - 1:
                     time.sleep(1)
                     continue
-            
+
             # Fatal process errors
             logger.error(f"Fatal process error: {e.stderr}")
             return None
-            
+
         except ClaudeCodeValidationError as e:
             # Validation errors are not retryable
             logger.error(f"Validation error: {e.field} = {e.value}")
             return None
-            
+
         except ClaudeCodeConfigurationError as e:
             # Configuration errors are not retryable
             logger.error(f"Configuration error: {e.config_field}")
             return None
-            
+
         except ClaudeCodeError as e:
             logger.error(f"Attempt {attempt + 1} general error: {e}")
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)
                 continue
-    
+
     logger.error(f"All {max_retries} attempts failed")
     return None
 
@@ -275,7 +275,7 @@ else:
 ```python
 class ClaudeService:
     """Service with advanced error recovery strategies."""
-    
+
     def __init__(self):
         self.wrapper = ClaudeCodeWrapper()
         self.fallback_responses = {
@@ -284,12 +284,12 @@ class ClaudeService:
             "validation_error": "Please check your question and try again.",
             "general_error": "Something went wrong. Please try again."
         }
-    
+
     def ask_with_fallback(self, query: str) -> dict:
         """Ask with intelligent fallback responses."""
         try:
             response = self.wrapper.run(query)
-            
+
             if response.is_error:
                 fallback = self._get_fallback_response(response.error_type)
                 return {
@@ -298,7 +298,7 @@ class ClaudeService:
                     "error_type": response.error_type,
                     "original_error": response.content
                 }
-            
+
             return {
                 "success": True,
                 "content": response.content,
@@ -308,7 +308,7 @@ class ClaudeService:
                     "duration": response.metrics.duration_ms
                 }
             }
-            
+
         except ClaudeCodeTimeoutError:
             return {
                 "success": False,
@@ -316,7 +316,7 @@ class ClaudeService:
                 "error_type": "timeout",
                 "retry_suggested": True
             }
-            
+
         except ClaudeCodeProcessError as e:
             # Try to provide specific guidance based on error
             if "authentication" in e.stderr.lower():
@@ -325,14 +325,14 @@ class ClaudeService:
                 content = "Claude Code binary not found. Please check installation."
             else:
                 content = self.fallback_responses["process_error"]
-            
+
             return {
                 "success": False,
                 "content": content,
                 "error_type": "process_error",
                 "details": e.stderr
             }
-            
+
         except ClaudeCodeValidationError as e:
             return {
                 "success": False,
@@ -340,7 +340,7 @@ class ClaudeService:
                 "error_type": "validation_error",
                 "field": e.field
             }
-            
+
         except ClaudeCodeError as e:
             return {
                 "success": False,
@@ -348,7 +348,7 @@ class ClaudeService:
                 "error_type": "general_error",
                 "severity": e.severity.value
             }
-    
+
     def _get_fallback_response(self, error_type: str) -> str:
         """Get appropriate fallback response for error type."""
         return self.fallback_responses.get(error_type, self.fallback_responses["general_error"])
@@ -363,24 +363,24 @@ response = wrapper.run(query)
 
 if response.is_error:
     print(f"Response error: {response.error_type}")
-    
+
     if response.error_subtype:
         print(f"Subtype: {response.error_subtype}")
-    
+
     # Handle different error types
     match response.error_type:
         case "tool_error":
             print("Tool execution failed")
-            
+
         case "permission_error":
             print("Permission denied for requested action")
-            
+
         case "rate_limit":
             print("Rate limit exceeded, please wait")
-            
+
         case "content_filter":
             print("Content was filtered, please modify your query")
-            
+
         case _:
             print(f"Unknown error: {response.error_type}")
 else:
@@ -394,54 +394,54 @@ Streaming responses require special error handling:
 ```python
 def handle_streaming_with_errors(query: str):
     """Handle streaming response with comprehensive error recovery."""
-    
+
     try:
         error_count = 0
         content_parts = []
-        
+
         for event in wrapper.run_streaming(query):
             event_type = event.get("type", "unknown")
-            
+
             match event_type:
                 case "error":
                     error_count += 1
                     error_msg = event.get("message", "Unknown streaming error")
                     print(f"Stream error: {error_msg}", file=sys.stderr)
-                    
+
                     # Decide whether to continue or abort
                     if error_count > 3:
                         print("Too many streaming errors, aborting", file=sys.stderr)
                         break
-                    
+
                 case "parse_error":
                     # JSON parsing errors in stream
                     raw_line = event.get("raw_line", "")
                     print(f"Parse error: {raw_line[:50]}...", file=sys.stderr)
-                    
+
                 case "message":
                     content = event.get("content", "")
                     if content:
                         content_parts.append(content)
                         print(content, end="", flush=True)
-                        
+
                 case "result":
                     status = event.get("status", "unknown")
                     if status != "complete":
                         print(f"\nStream ended unexpectedly: {status}", file=sys.stderr)
-        
+
         print()  # Final newline
-        
+
         # Return results with error information
         return {
             "content": "".join(content_parts),
             "error_count": error_count,
             "success": error_count == 0
         }
-        
+
     except KeyboardInterrupt:
         print("\nStream interrupted by user", file=sys.stderr)
         return {"content": "", "error_count": 1, "success": False}
-        
+
     except Exception as e:
         print(f"\nStreaming failed: {e}", file=sys.stderr)
         return {"content": "", "error_count": 1, "success": False}
@@ -465,7 +465,7 @@ from datetime import datetime
 
 class ErrorLogger:
     """Structured error logging for Claude wrapper."""
-    
+
     def __init__(self):
         self.logger = logging.getLogger("claude_wrapper_errors")
         handler = logging.StreamHandler()
@@ -473,7 +473,7 @@ class ErrorLogger:
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
         self.logger.setLevel(logging.INFO)
-    
+
     def log_error(self, error: ClaudeCodeError, query: str, context: dict = None):
         """Log error with structured information."""
         error_data = {
@@ -485,7 +485,7 @@ class ErrorLogger:
             "query_preview": query[:100] + "..." if len(query) > 100 else query,
             "context": context or {}
         }
-        
+
         # Add specific error details
         if isinstance(error, ClaudeCodeTimeoutError):
             error_data["timeout_duration"] = error.timeout_duration
@@ -495,7 +495,7 @@ class ErrorLogger:
         elif isinstance(error, ClaudeCodeValidationError):
             error_data["field"] = error.field
             error_data["value"] = str(error.value)
-        
+
         self.logger.error(json.dumps(error_data))
 
 # Usage
@@ -516,12 +516,12 @@ import time
 
 class ErrorMetrics:
     """Collect and analyze error patterns."""
-    
+
     def __init__(self):
         self.error_counts = Counter()
         self.error_history = []
         self.start_time = time.time()
-    
+
     def record_error(self, error: ClaudeCodeError, query: str):
         """Record error occurrence."""
         error_record = {
@@ -531,15 +531,15 @@ class ErrorMetrics:
             "query_length": len(query),
             "message": str(error)
         }
-        
+
         self.error_counts[type(error).__name__] += 1
         self.error_history.append(error_record)
-    
+
     def get_error_summary(self) -> dict:
         """Get error summary statistics."""
         total_time = time.time() - self.start_time
         total_errors = sum(self.error_counts.values())
-        
+
         return {
             "total_errors": total_errors,
             "error_rate": total_errors / (total_time / 60),  # errors per minute
@@ -625,23 +625,23 @@ Implement intelligent retry strategies:
 def smart_retry(query: str, max_attempts: int = 3):
     """Retry with intelligent backoff and adaptation."""
     timeout = 30.0
-    
+
     for attempt in range(max_attempts):
         try:
             config = ClaudeCodeConfig(timeout=timeout)
             wrapper = ClaudeCodeWrapper(config)
             response = wrapper.run(query)
-            
+
             if not response.is_error:
                 return response.content
-                
+
         except ClaudeCodeTimeoutError:
             timeout *= 1.5  # Increase timeout for next attempt
         except ClaudeCodeProcessError:
             time.sleep(2 ** attempt)  # Exponential backoff
         except ClaudeCodeValidationError:
             break  # Don't retry validation errors
-    
+
     return "Unable to process request after multiple attempts."
 ```
 

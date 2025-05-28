@@ -165,7 +165,7 @@ def create_wrapper_for_use_case(use_case: str) -> ClaudeCodeWrapper:
         "real_time": (False, 0),            # No caching
         "analysis": (True, 900.0),          # 15 minutes
     }
-    
+
     enabled, ttl = cache_configs.get(use_case, (True, 1800.0))
     return ClaudeCodeWrapper(ClaudeCodeConfig(
         cache_responses=enabled,
@@ -213,7 +213,7 @@ class SmartWrapper:
         self.uncached_wrapper = ClaudeCodeWrapper(
             ClaudeCodeConfig(cache_responses=False)
         )
-    
+
     def ask(self, query: str, use_cache: bool = True, **kwargs):
         wrapper = self.cached_wrapper if use_cache else self.uncached_wrapper
         return wrapper.ask(query, **kwargs)

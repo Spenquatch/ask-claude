@@ -15,8 +15,10 @@ Get up and running with Claude Code SDK Wrapper in 5 minutes.
 git clone <repository-url>
 cd ask_claude
 
-# No pip install needed - zero dependencies!
-# Just verify it works:
+# Install any dependencies
+pip install -r requirements.txt
+
+# Verify it works:
 python getting_started.py
 ```
 

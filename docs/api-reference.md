@@ -343,7 +343,7 @@ Base exception for all Claude Code wrapper errors.
 
 ```python
 class ClaudeCodeError(Exception):
-    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.MEDIUM, 
+    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.MEDIUM,
                  context: Optional[Dict[str, Any]] = None)
 ```
 
@@ -370,7 +370,7 @@ Raised when Claude Code process fails.
 
 ```python
 class ClaudeCodeProcessError(ClaudeCodeError):
-    def __init__(self, message: str, returncode: int, stderr: str = "", 
+    def __init__(self, message: str, returncode: int, stderr: str = "",
                  context: Optional[Dict[str, Any]] = None)
 ```
 
@@ -384,7 +384,7 @@ Raised when input validation fails.
 
 ```python
 class ClaudeCodeValidationError(ClaudeCodeError):
-    def __init__(self, message: str, field: str = "", value: Any = None, 
+    def __init__(self, message: str, field: str = "", value: Any = None,
                  context: Optional[Dict[str, Any]] = None)
 ```
 
@@ -398,7 +398,7 @@ Raised when configuration is invalid.
 
 ```python
 class ClaudeCodeConfigurationError(ClaudeCodeError):
-    def __init__(self, message: str, config_field: str = "", 
+    def __init__(self, message: str, config_field: str = "",
                  context: Optional[Dict[str, Any]] = None)
 ```
 
@@ -512,7 +512,7 @@ call(func: Callable, *args, **kwargs)
 Retry decorator with exponential backoff.
 
 ```python
-retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0, 
+retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0,
                   backoff_factor: float = 2.0, max_delay: float = 60.0)
 ```
 

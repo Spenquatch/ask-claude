@@ -9,7 +9,7 @@ Welcome to the Claude Code SDK Wrapper documentation.
 - **[Configuration](configuration.md)** - Configuration options and examples
 - **[API Reference](api-reference.md)** - Complete API documentation
 
-### User Guides  
+### User Guides
 - **[CLI Usage](cli-usage.md)** - Command-line interface guide
 - **[MCP Integration](mcp-integration.md)** - MCP tools and auto-approval
 - **[Error Handling](error-handling.md)** - Handle errors gracefully

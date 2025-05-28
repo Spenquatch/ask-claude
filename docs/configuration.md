@@ -263,7 +263,7 @@ except ClaudeCodeConfigurationError as e:
 }
 ```
 
-### Production  
+### Production
 ```python
 # config/production.json
 {
@@ -344,15 +344,15 @@ def load_config(config_path: str) -> ClaudeCodeConfig:
     try:
         with open(config_path) as f:
             config_data = json.load(f)
-        
+
         config = ClaudeCodeConfig(**config_data)
-        
+
         # Additional validation
         if config.timeout < 10:
             raise ValueError("Timeout too low for production")
-            
+
         return config
-        
+
     except Exception as e:
         raise ClaudeCodeConfigurationError(f"Config load failed: {e}")
 ```

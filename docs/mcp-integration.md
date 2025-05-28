@@ -308,29 +308,29 @@ wrapper.allow_mcp_tools("myapp", [
 ```python
 class SmartMCPWrapper:
     """Wrapper that dynamically enables MCP tools based on query."""
-    
+
     def __init__(self, mcp_config_path: str):
         self.wrapper = ClaudeCodeWrapper(
             ClaudeCodeConfig(mcp_config_path=Path(mcp_config_path))
         )
-        
+
     def ask_with_context(self, query: str) -> ClaudeCodeResponse:
         """Enable appropriate MCP tools based on query content."""
         allowed_tools = []
-        
+
         # Analyze query to determine needed tools
         if "file" in query.lower() or "read" in query.lower():
             allowed_tools.extend([
                 "mcp__filesystem__read_file",
                 "mcp__filesystem__list_directory"
             ])
-        
+
         if "github" in query.lower() or "repository" in query.lower():
             allowed_tools.extend([
                 "mcp__github__get_repository",
                 "mcp__github__list_repositories"
             ])
-        
+
         # Update allowed tools and execute
         self.wrapper.config.allowed_tools = allowed_tools
         return self.wrapper.ask(query)
@@ -343,13 +343,13 @@ class SmartMCPWrapper:
 with wrapper.session() as session:
     # Enable filesystem tools for this session
     wrapper.allow_mcp_tools("filesystem")
-    
+
     # First query: read file
     response1 = session.ask("Read the config.json file")
-    
+
     # Second query: modify based on content
     response2 = session.ask("Update the version number in the config")
-    
+
     # Tools remain available throughout session
     response3 = session.ask("Save the changes")
 ```
@@ -363,7 +363,7 @@ def create_restricted_wrapper(user_role: str) -> ClaudeCodeWrapper:
         mcp_config_path=Path("mcp-config.json")
     )
     wrapper = ClaudeCodeWrapper(config)
-    
+
     if user_role == "admin":
         # Full access
         wrapper.allow_mcp_tools("filesystem")
@@ -375,7 +375,7 @@ def create_restricted_wrapper(user_role: str) -> ClaudeCodeWrapper:
     else:
         # No MCP access
         pass
-    
+
     return wrapper
 ```
 
@@ -417,17 +417,17 @@ config = ClaudeCodeConfig(mcp_config_path=Path(mcp_config_file))
 ```python
 class AuditedWrapper(ClaudeCodeWrapper):
     """Wrapper that logs all MCP tool usage."""
-    
+
     def run(self, query: str, **kwargs) -> ClaudeCodeResponse:
         # Log the query and allowed tools
         self.logger.info(f"Query: {query}")
         self.logger.info(f"Allowed MCP tools: {self.config.allowed_tools}")
-        
+
         response = super().run(query, **kwargs)
-        
+
         # Log which tools were actually used (would need response parsing)
         self.logger.info(f"Response generated with MCP access")
-        
+
         return response
 ```
 

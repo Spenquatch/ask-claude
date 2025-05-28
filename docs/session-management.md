@@ -183,8 +183,8 @@ Combine insights from multiple sessions:
 ```python
 # Merge two architecture discussions
 merged = session_mgr.merge_sessions(
-    session1, 
-    session2, 
+    session1,
+    session2,
     merge_strategy="interleave"  # or "append"
 )
 ```
@@ -200,8 +200,8 @@ from session_manager import AutoRecoverySession
 
 # Create auto-recovery session
 auto_session = AutoRecoverySession(
-    wrapper, 
-    session_mgr, 
+    wrapper,
+    session_mgr,
     auto_save_interval=5  # Save every 5 messages
 )
 
@@ -223,11 +223,11 @@ class DevelopmentPipeline:
     def __init__(self):
         self.wrapper = ClaudeCodeWrapper()
         self.session_mgr = SessionManager(".pipeline_sessions")
-        
+
     def run_pipeline(self, project_spec):
         # Start new or resume existing pipeline
         session = self.wrapper.create_session(f"pipeline-{project_spec['id']}")
-        
+
         stages = [
             ("requirements", self.gather_requirements),
             ("design", self.design_architecture),
@@ -235,33 +235,33 @@ class DevelopmentPipeline:
             ("testing", self.write_tests),
             ("documentation", self.generate_docs)
         ]
-        
+
         for stage_name, stage_func in stages:
             try:
                 # Create checkpoint before each stage
                 checkpoint = self.session_mgr.create_checkpoint(
-                    session, 
+                    session,
                     f"before-{stage_name}"
                 )
-                
+
                 # Run stage
                 result = stage_func(session, project_spec)
-                
+
                 # Save progress
                 self.session_mgr.save_session(
                     session,
                     tags=["pipeline", stage_name, project_spec['id']],
                     description=f"Completed {stage_name}"
                 )
-                
+
             except Exception as e:
                 print(f"Error in {stage_name}: {e}")
                 # Can restore from checkpoint
                 session = self.session_mgr.restore_checkpoint(checkpoint)
-                
+
     def gather_requirements(self, session, spec):
         return session.ask(f"Analyze these requirements: {spec['requirements']}")
-        
+
     # ... other stage methods
 ```
 
@@ -275,10 +275,10 @@ from concurrent.futures import ThreadPoolExecutor
 def explore_approach(approach_name, base_session, session_mgr):
     # Branch from base session
     branch = session_mgr.branch_session(base_session, 2, approach_name)
-    
+
     # Explore this approach
     response = branch.ask(f"Implement using {approach_name} pattern")
-    
+
     # Save results
     session_mgr.save_session(branch, tags=["exploration", approach_name])
     return approach_name, response
@@ -290,7 +290,7 @@ with ThreadPoolExecutor(max_workers=4) as executor:
         executor.submit(explore_approach, approach, base_session, session_mgr)
         for approach in approaches
     ]
-    
+
     results = [f.result() for f in futures]
 ```
 
@@ -322,7 +322,7 @@ config = ClaudeCodeConfig(
     # Session management
     session_id="specific-session-id",     # Resume this session
     continue_session=True,                # Continue last session
-    
+
     # Other options
     timeout=120,
     max_retries=5,

@@ -52,11 +52,11 @@ class ProductionClaudeService:
     def __init__(self, config_path: str):
         with open(config_path) as f:
             config_data = json.load(f)
-        
+
         self.config = ClaudeCodeConfig(**config_data)
         self.wrapper = ClaudeCodeWrapper(self.config)
         self.logger = logging.getLogger(__name__)
-        
+
     def process_request(self, query: str) -> dict:
         try:
             response = self.wrapper.run(query)
@@ -384,14 +384,14 @@ def check_health():
             text=True,
             timeout=30
         )
-        
+
         if result.returncode == 0:
             logger.info("Health check passed")
             return True
         else:
             logger.error(f"Health check failed: {result.stderr}")
             return False
-            
+
     except Exception as e:
         logger.error(f"Health check error: {e}")
         return False
@@ -401,15 +401,15 @@ def main():
     while True:
         timestamp = datetime.now().isoformat()
         is_healthy = check_health()
-        
+
         # Log to file for external monitoring
         with open("/var/log/claude-wrapper/health.log", "a") as f:
             f.write(f"{timestamp},{is_healthy}\n")
-        
+
         if not is_healthy:
             # Send alert (implement your alerting logic)
             logger.critical("Service unhealthy - alerting required")
-        
+
         time.sleep(60)  # Check every minute
 
 if __name__ == "__main__":
@@ -435,38 +435,38 @@ error_rate = Gauge('claude_error_rate', 'Error rate')
 
 class MetricsWrapper:
     """Wrapper with Prometheus metrics."""
-    
+
     def __init__(self, wrapper: ClaudeCodeWrapper):
         self.wrapper = wrapper
         self.recent_requests = []
-    
+
     def run(self, query: str, **kwargs):
         """Run with metrics collection."""
         start_time = time.time()
-        
+
         try:
             with request_duration.time():
                 response = self.wrapper.run(query, **kwargs)
-            
+
             # Record metrics
             status = "error" if response.is_error else "success"
             request_total.labels(status=status).inc()
-            
+
             # Update recent requests for error rate calculation
             self.recent_requests.append({
                 'timestamp': time.time(),
                 'error': response.is_error
             })
-            
+
             # Keep only last 100 requests
             self.recent_requests = self.recent_requests[-100:]
-            
+
             # Update error rate
             recent_errors = sum(1 for r in self.recent_requests if r['error'])
             error_rate.set(recent_errors / len(self.recent_requests))
-            
+
             return response
-            
+
         except Exception as e:
             request_total.labels(status="exception").inc()
             raise
@@ -537,7 +537,7 @@ upstream claude_wrapper {
 server {
     listen 80;
     server_name claude-wrapper.yourdomain.com;
-    
+
     location / {
         proxy_pass http://claude_wrapper;
         proxy_set_header Host $host;
@@ -547,7 +547,7 @@ server {
         proxy_send_timeout 300s;
         proxy_read_timeout 300s;
     }
-    
+
     location /health {
         access_log off;
         proxy_pass http://claude_wrapper/health;
@@ -603,7 +603,7 @@ SECURE_CONFIG = ClaudeCodeConfig(
         "mcp__filesystem__read",
         "mcp__database__query"
     ],
-    
+
     # Explicitly disallow dangerous operations
     disallowed_tools=[
         "Bash(rm,del,sudo,chmod,chown,mv,cp)",
@@ -612,7 +612,7 @@ SECURE_CONFIG = ClaudeCodeConfig(
         "mcp__filesystem__delete",
         "mcp__database__write"
     ],
-    
+
     # Secure execution environment
     working_directory=Path("/app/secure_workspace"),
     environment_vars={
@@ -620,7 +620,7 @@ SECURE_CONFIG = ClaudeCodeConfig(
         "PYTHONPATH": "/app/secure_libs",
         "PATH": "/usr/local/bin:/usr/bin:/bin"
     },
-    
+
     # Conservative timeouts
     timeout=30.0,
     max_turns=5,
@@ -715,14 +715,14 @@ from pathlib import Path
 class DisasterRecovery:
     def __init__(self, backup_path: str):
         self.backup_path = Path(backup_path)
-    
+
     def restore_config(self):
         """Restore configuration from backup."""
         config_backup = self.backup_path / "config"
         if config_backup.exists():
             shutil.copytree(config_backup, "config", dirs_exist_ok=True)
             print("Configuration restored")
-    
+
     def verify_service(self):
         """Verify service is working after recovery."""
         try:
@@ -734,20 +734,20 @@ class DisasterRecovery:
             return result.returncode == 0
         except:
             return False
-    
+
     def full_recovery(self):
         """Perform full disaster recovery."""
         print("Starting disaster recovery...")
-        
+
         # Stop service
         subprocess.run(["systemctl", "stop", "claude-wrapper"])
-        
+
         # Restore configuration
         self.restore_config()
-        
+
         # Start service
         subprocess.run(["systemctl", "start", "claude-wrapper"])
-        
+
         # Verify
         if self.verify_service():
             print("Recovery successful")
@@ -771,24 +771,24 @@ from claude_code_wrapper import ClaudeCodeWrapper, ClaudeCodeConfig
 
 class WrapperPool:
     """Connection pool for Claude wrappers."""
-    
+
     def __init__(self, config: ClaudeCodeConfig, pool_size: int = 5):
         self.pool = queue.Queue(maxsize=pool_size)
         self.config = config
-        
+
         # Initialize pool
         for _ in range(pool_size):
             wrapper = ClaudeCodeWrapper(config)
             self.pool.put(wrapper)
-    
+
     def get_wrapper(self):
         """Get wrapper from pool."""
         return self.pool.get()
-    
+
     def return_wrapper(self, wrapper):
         """Return wrapper to pool."""
         self.pool.put(wrapper)
-    
+
     def execute(self, query: str, **kwargs):
         """Execute query using pooled wrapper."""
         wrapper = self.get_wrapper()
@@ -813,22 +813,22 @@ from typing import Optional
 
 class ResponseCache:
     """Redis-based response caching."""
-    
+
     def __init__(self, redis_url: str = "redis://localhost:6379"):
         self.redis = redis.from_url(redis_url)
         self.ttl = 3600  # 1 hour
-    
+
     def _make_key(self, query: str, config_hash: str) -> str:
         """Create cache key from query and config."""
         content = f"{query}:{config_hash}"
         return f"claude:{hashlib.md5(content.encode()).hexdigest()}"
-    
+
     def get(self, query: str, config_hash: str) -> Optional[dict]:
         """Get cached response."""
         key = self._make_key(query, config_hash)
         cached = self.redis.get(key)
         return json.loads(cached) if cached else None
-    
+
     def set(self, query: str, config_hash: str, response: dict):
         """Cache response."""
         key = self._make_key(query, config_hash)
@@ -839,16 +839,16 @@ cache = ResponseCache()
 
 def cached_query(query: str):
     config_hash = "default"  # Compute based on actual config
-    
+
     # Check cache first
     cached = cache.get(query, config_hash)
     if cached:
         return cached
-    
+
     # Execute query
     wrapper = ClaudeCodeWrapper()
     response = wrapper.run(query)
-    
+
     # Cache result
     result = {
         "content": response.content,
@@ -856,7 +856,7 @@ def cached_query(query: str):
         "cost": response.metrics.cost_usd
     }
     cache.set(query, config_hash, result)
-    
+
     return result
 ```
 
