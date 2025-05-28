@@ -1,6 +1,6 @@
 # Documentation
 
-Welcome to the Claude Code SDK Wrapper documentation.
+Welcome to the Ask Claude - Claude Code SDK Wrapper documentation.
 
 ## 📚 Core Documentation
 
@@ -23,7 +23,7 @@ Welcome to the Claude Code SDK Wrapper documentation.
 
 ### For New Users
 1. Start with the [Quick Start Guide](quickstart.md)
-2. Try the CLI with `python cli_tool.py --help`
+2. Try the CLI with `poetry run python -m ask_claude.cli --help`
 3. Check out the [examples/](../examples/) directory
 
 ### For Developers

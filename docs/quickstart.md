@@ -1,10 +1,10 @@
 # Quick Start Guide
 
-Get up and running with Claude Code SDK Wrapper in 5 minutes.
+Get up and running with Ask Claude - Claude Code SDK Wrapper in 5 minutes.
 
 ## Prerequisites
 
-1. **Python 3.9+** - Check with `python --version`
+1. **Python 3.10+** - Check with `python --version`
 2. **Claude Code CLI** - Install from [Anthropic](https://docs.anthropic.com/en/docs/claude-code)
 3. **API Key** - Set up your Claude API key
 
@@ -15,11 +15,11 @@ Get up and running with Claude Code SDK Wrapper in 5 minutes.
 git clone <repository-url>
 cd ask_claude
 
-# Install any dependencies
-pip install -r requirements.txt
+# Install with Poetry (recommended)
+poetry install
 
 # Verify it works:
-python getting_started.py
+poetry run python examples/getting_started.py
 ```
 
 ## Your First Query
@@ -27,7 +27,7 @@ python getting_started.py
 ### Option 1: Simple Function
 
 ```python
-from claude_code_wrapper import ask_claude
+from ask_claude.wrapper import ask_claude
 
 response = ask_claude("What is Python?")
 print(response.content)
@@ -36,17 +36,21 @@ print(response.content)
 ### Option 2: Using the Wrapper
 
 ```python
-from claude_code_wrapper import ClaudeCodeWrapper
+from ask_claude.wrapper import ClaudeCodeWrapper
 
 wrapper = ClaudeCodeWrapper()
-response = wrapper.ask("Explain decorators in Python")
+response = wrapper.run("Explain decorators in Python")
 print(response.content)
 ```
 
 ### Option 3: Command Line
 
 ```bash
-python cli_tool.py ask "What is Python?"
+# Development
+poetry run python -m ask_claude.cli ask "What is Python?"
+
+# After installation
+ask-claude ask "What is Python?"
 ```
 
 ## Common Patterns
@@ -62,6 +66,8 @@ response = ask_claude("Balanced query", model="sonnet")
 ### Sessions (Multi-turn Conversations)
 
 ```python
+from ask_claude.wrapper import ClaudeCodeWrapper
+
 wrapper = ClaudeCodeWrapper()
 with wrapper.session() as session:
     session.ask("I'm learning Python")
@@ -75,53 +81,31 @@ with wrapper.session() as session:
 ```python
 # In Python
 for event in wrapper.run_streaming("Write a story about AI"):
-    if event.get("type") == "message":
+    if event.get("type") == "assistant":
         print(event.get("content", ""), end="")
 
 # From CLI
-python cli_tool.py stream "Write a story about AI"
+poetry run python -m ask_claude.cli stream "Write a story about AI"
 ```
 
 ### Error Handling
 
 ```python
-from claude_code_wrapper import ClaudeCodeError, ClaudeCodeTimeoutError
+from ask_claude.wrapper import ClaudeCodeError, ClaudeCodeTimeoutError
 
 try:
-    response = wrapper.ask("Complex query", timeout=30.0)
+    response = wrapper.run("Complex query", timeout=30.0)
 except ClaudeCodeTimeoutError:
     print("Request timed out - try a shorter query")
 except ClaudeCodeError as e:
     print(f"Error: {e}")
 ```
 
-## MCP Tools (Advanced)
+## Advanced Features
 
-### Basic MCP Usage
-
-```python
-# If you have MCP servers configured
-wrapper = ClaudeCodeWrapper()
-response = wrapper.ask("List files in the current directory")
-```
-
-### Auto-Approval
-
-```python
-from claude_code_wrapper import ClaudeCodeConfig
-
-# Auto-approve specific tools
-config = ClaudeCodeConfig(
-    mcp_auto_approval={
-        "enabled": True,
-        "strategy": "allowlist",
-        "allowlist": ["mcp__filesystem__read_file"]
-    }
-)
-
-wrapper = ClaudeCodeWrapper(config)
-response = wrapper.ask("Read the README.md file")
-```
+For MCP integration, configuration options, and more advanced patterns, see:
+- [MCP Integration Guide](mcp-integration.md)
+- [Configuration Guide](configuration.md)
 
 ## Next Steps
 

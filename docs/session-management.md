@@ -1,6 +1,6 @@
 # Session Management Guide
 
-The Claude Code Wrapper provides comprehensive session management capabilities essential for building autonomous development pipelines and maintaining conversation continuity.
+Ask Claude - Claude Code SDK Wrapper provides comprehensive session management capabilities essential for building autonomous development pipelines and maintaining conversation continuity.
 
 ## Table of Contents
 - [Basic Session Management](#basic-session-management)
@@ -14,7 +14,7 @@ The Claude Code Wrapper provides comprehensive session management capabilities e
 ### Starting a New Session
 
 ```python
-from claude_code_wrapper import ClaudeCodeWrapper
+from ask_claude.wrapper import ClaudeCodeWrapper
 
 wrapper = ClaudeCodeWrapper()
 response = wrapper.run("Create a Python web server")
@@ -39,11 +39,11 @@ The wrapper supports the Claude Code CLI's `-c` flag for continuing conversation
 response = wrapper.continue_conversation("What about authentication?")
 
 # Method 2: Using the convenience function
-from claude_code_wrapper import continue_claude
+from ask_claude.wrapper import continue_claude
 response = continue_claude()
 
 # Method 3: Using configuration
-from claude_code_wrapper import ClaudeCodeConfig
+from ask_claude.wrapper import ClaudeCodeConfig
 config = ClaudeCodeConfig(continue_session=True)
 wrapper = ClaudeCodeWrapper(config)
 response = wrapper.run("Continue with the previous topic")
@@ -58,7 +58,7 @@ Resume a specific session by ID:
 response = wrapper.resume_specific_session("abc-123-def", "Add error handling")
 
 # Method 2: Using the convenience function
-from claude_code_wrapper import resume_claude
+from ask_claude.wrapper import resume_claude
 response = resume_claude("abc-123-def", "Add error handling")
 
 # Method 3: Using configuration
@@ -70,7 +70,7 @@ response = wrapper.run("Add error handling")
 ### Session-Aware Convenience Function
 
 ```python
-from claude_code_wrapper import ask_claude_with_session
+from ask_claude.wrapper import ask_claude_with_session
 
 # Continue last session
 response = ask_claude_with_session("Continue the implementation", continue_last=True)
@@ -309,10 +309,10 @@ The wrapper fully supports Claude's session flags:
 
 ```bash
 # Continue last conversation
-python -c "from claude_code_wrapper import continue_claude; print(continue_claude().content)"
+python -c "from ask_claude.wrapper import continue_claude; print(continue_claude().content)"
 
 # Resume specific session
-python -c "from claude_code_wrapper import resume_claude; print(resume_claude('abc-123').content)"
+python -c "from ask_claude.wrapper import resume_claude; print(resume_claude('abc-123').content)"
 ```
 
 ## Configuration Options

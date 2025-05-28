@@ -1,6 +1,6 @@
 # Error Handling Guide
 
-The Claude Code SDK Wrapper provides comprehensive error handling with graceful degradation and detailed error information.
+Ask Claude - Claude Code SDK Wrapper provides comprehensive error handling with graceful degradation and detailed error information.
 
 ## Error Hierarchy
 
@@ -148,7 +148,7 @@ except ClaudeCodeConfigurationError as e:
 ### Basic Error Handling
 
 ```python
-from claude_code_wrapper import (
+from ask_claude.wrapper import (
     ClaudeCodeWrapper,
     ClaudeCodeError,
     ClaudeCodeTimeoutError,

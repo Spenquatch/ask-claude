@@ -23,7 +23,7 @@ The Claude Code Wrapper implements **client-side response caching** to reduce AP
 ### Basic Setup
 
 ```python
-from claude_code_wrapper import ClaudeCodeWrapper, ClaudeCodeConfig
+from ask_claude.wrapper import ClaudeCodeWrapper, ClaudeCodeConfig
 
 # Enable caching with default 30-minute TTL
 config = ClaudeCodeConfig(

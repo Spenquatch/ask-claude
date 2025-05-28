@@ -1,13 +1,13 @@
 # Configuration Guide
 
-The Claude Code Wrapper provides extensive configuration options for production use.
+Ask Claude - Claude Code SDK Wrapper provides extensive configuration options for production use.
 
 ## Configuration Methods
 
 ### 1. Using ClaudeCodeConfig Class
 
 ```python
-from claude_code_wrapper import ClaudeCodeWrapper, ClaudeCodeConfig
+from ask_claude.wrapper import ClaudeCodeWrapper, ClaudeCodeConfig
 
 config = ClaudeCodeConfig(
     claude_binary="claude",
