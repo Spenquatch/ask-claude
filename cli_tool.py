@@ -47,11 +47,17 @@ class ClaudeCLI:
     
     def _setup_logging(self) -> logging.Logger:
         """Set up logging for CLI operations."""
-        logging.basicConfig(
-            level=logging.WARNING,  # Default to WARNING for CLI
-            format='%(levelname)s: %(message)s'
-        )
-        return logging.getLogger(__name__)
+        # Suppress all loggers by default for clean CLI output
+        logging.getLogger().setLevel(logging.CRITICAL)
+        
+        # Create our own logger for CLI-specific messages
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.WARNING)
+        
+        # Also suppress the wrapper logger by default
+        logging.getLogger('claude_code_wrapper').setLevel(logging.CRITICAL)
+        
+        return logger
     
     def load_config(self, config_path: Optional[Path] = None) -> ClaudeCodeConfig:
         """Load configuration from file or use defaults."""
@@ -82,7 +88,8 @@ class ClaudeCLI:
         try:
             if verbose:
                 self.config.log_level = logging.INFO
-                self.config.verbose = True
+                # Note: Don't set config.verbose = True here as it adds --verbose
+                # to Claude commands, which can cause unwanted meta-commentary
             
             self.wrapper = ClaudeCodeWrapper(self.config)
             return True
@@ -161,6 +168,57 @@ class ClaudeCLI:
             print(f"❌ Unexpected Error: {e}", file=sys.stderr)
             return 1
     
+    def _get_tool_display_info(self, tool_name: str, tool_input: dict) -> tuple[str, str, dict]:
+        """Get display information for a tool based on its type.
+        
+        Returns: (emoji, action_description, display_fields)
+        """
+        # Tool display registry - easily extensible
+        tool_patterns = {
+            # Core tools
+            "Bash": ("🖥️", "run Bash command", {"command": "Command", "description": "Purpose"}),
+            "Read": ("📄", "read file", {"file_path": "File"}),
+            "Write": ("📝", "write file", {"file_path": "File"}),
+            "Edit": ("✏️", "edit file", {"file_path": "File"}),
+            "MultiEdit": ("✏️", "edit multiple files", {"file_path": "File"}),
+            "Grep": ("🔍", "search with grep", {"pattern": "Pattern", "path": "Path"}),
+            "Glob": ("🔍", "search with glob", {"pattern": "Pattern", "path": "Path"}),
+            "LS": ("📁", "list directory", {"path": "Path"}),
+            "Task": ("🤖", "create agent task", {"description": "Task", "prompt": "Details"}),
+            
+            # Web tools
+            "WebSearch": ("🌐", "search the web", {"query": "Query"}),
+            "WebFetch": ("🌐", "fetch web content", {"url": "URL", "prompt": "Purpose"}),
+            
+            # Todo tools
+            "TodoRead": ("📋", "read todos", {}),
+            "TodoWrite": ("📋", "update todos", {"todos": "Updates"}),
+            
+            # Notebook tools
+            "NotebookRead": ("📓", "read notebook", {"notebook_path": "File"}),
+            "NotebookEdit": ("📓", "edit notebook", {"notebook_path": "File", "cell_number": "Cell"}),
+        }
+        
+        # Check for exact match first
+        if tool_name in tool_patterns:
+            return tool_patterns[tool_name]
+        
+        # Special handling for MCP tools
+        if "sequential-thinking" in tool_name:
+            return ("🤔", "think", {
+                "thought": "Thought",
+                "thoughtNumber": "Step",
+                "totalThoughts": "Total"
+            })
+        elif "deepwiki" in tool_name:
+            return ("📚", "fetch documentation", {"url": "URL", "maxDepth": "Depth"})
+        elif "mcp__" in tool_name:
+            # Generic MCP tool
+            return ("🔧", f"use MCP tool", {})
+        
+        # Default
+        return ("🔧", "use tool", {"description": "Purpose", "query": "Query", "command": "Command"})
+    
     def cmd_stream(self, query: str, **kwargs) -> int:
         """Handle streaming command."""
         if not query.strip():
@@ -168,15 +226,21 @@ class ClaudeCLI:
             return 1
         
         try:
-            print("🌊 Starting stream...", file=sys.stderr)
+            if kwargs.get('verbose'):
+                print("🌊 Starting stream...", file=sys.stderr)
             
             event_count = 0
             error_count = 0
             content_parts = []
+            pending_tool_uses = {}  # Track tool uses by ID to match with results
             
             for event in self.wrapper.run_streaming(query, **kwargs):
                 event_count += 1
                 event_type = event.get("type", "unknown")
+                
+                # DEBUG: Show all events if verbose
+                if kwargs.get('verbose'):
+                    print(f"\n[DEBUG] Event #{event_count}: {event_type} - {event}\n", file=sys.stderr)
                 
                 if event_type == "error":
                     error_count += 1
@@ -187,25 +251,128 @@ class ClaudeCLI:
                     if kwargs.get('verbose'):
                         print(f"⚠️  Parse Error: {event.get('message', 'Parse failed')}", file=sys.stderr)
                     
-                # Handle user messages (though unlikely in streaming responses)
+                # Handle user messages (tool results/errors)
                 elif event_type == "user":
-                    if kwargs.get('verbose'):
-                        print(f"👤 User message received", file=sys.stderr)
-                
-                # Handle assistant messages according to Claude Code docs
-                elif event_type == "assistant":
                     message = event.get("message", {})
                     if isinstance(message, dict):
-                        # Extract content from the Anthropic SDK message format
                         content = message.get("content", [])
                         if isinstance(content, list):
                             for item in content:
-                                if isinstance(item, dict) and item.get("type") == "text":
-                                    text = item.get("text", "")
-                                    if text:
-                                        content_parts.append(text)
-                                        print(text, end="", flush=True)
+                                if isinstance(item, dict) and item.get("type") == "tool_result":
+                                    tool_use_id = item.get("tool_use_id")
+                                    is_error = item.get("is_error", False)
+                                    result_content = item.get("content", "")
+                                    
+                                    # Get the original tool info
+                                    tool_info = pending_tool_uses.get(tool_use_id, {})
+                                    tool_name = tool_info.get("name", "unknown")
+                                    
+                                    if is_error:
+                                        # Handle permission errors specially
+                                        if "permissions" in result_content and "hasn't granted" in result_content:
+                                            print(f"❌ Tool '{tool_name}' not approved", file=sys.stderr)
+                                            print(f"   To enable, add: --approval-strategy all", file=sys.stderr)
+                                            print(f"   Or: --approval-allowlist '{tool_name}'", file=sys.stderr)
+                                            print(f"   See docs/mcp-integration.md for details\n", file=sys.stderr)
+                                        else:
+                                            # Other errors
+                                            print(f"❌ Tool error: {result_content}", file=sys.stderr)
+                                    else:
+                                        # Successful tool result
+                                        if "sequential-thinking" in tool_name:
+                                            # For sequential thinking, just show completion checkmark
+                                            print(f"✓", file=sys.stderr)
+                                        elif kwargs.get('verbose'):
+                                            # Show full results in verbose mode
+                                            if result_content:
+                                                print(f"✓ Tool completed successfully", file=sys.stderr)
+                                                if len(result_content) > 200:
+                                                    print(f"   Result: {result_content[:200]}...", file=sys.stderr)
+                                                else:
+                                                    print(f"   Result: {result_content}", file=sys.stderr)
+                                        else:
+                                            # For other tools in non-verbose mode, just acknowledge
+                                            if tool_name in ["Bash", "Read", "Write", "Edit"]:
+                                                print(f"✓ {tool_name} completed", file=sys.stderr)
+                
+                # Handle assistant messages according to Claude Code docs
+                elif event_type == "assistant":
+                    # DEBUG: Show raw event structure
+                    if kwargs.get('verbose'):
+                        print(f"\n[DEBUG] Assistant event: {event}\n", file=sys.stderr)
+                    
+                    message = event.get("message", {})
+                    if isinstance(message, dict):
+                        stop_reason = message.get("stop_reason")
+                        content = message.get("content", [])
+                        
+                        # Process all content items
+                        if isinstance(content, list):
+                            for item in content:
+                                if isinstance(item, dict):
+                                    item_type = item.get("type")
+                                    
+                                    if item_type == "text":
+                                        text = item.get("text", "")
+                                        if text:
+                                            # For tool_use stop_reason, show as thinking
+                                            if stop_reason == "tool_use":
+                                                print(f"💭 {text}", file=sys.stderr)
+                                            else:
+                                                # Regular content - add to output
+                                                content_parts.append(text)
+                                                print(text, end="", flush=True)
+                                    
+                                    elif item_type == "tool_use":
+                                        # Track tool use for matching with results
+                                        tool_id = item.get("id")
+                                        tool_name = item.get("name", "unknown")
+                                        tool_input = item.get("input", {})
+                                        
+                                        pending_tool_uses[tool_id] = {
+                                            "name": tool_name,
+                                            "input": tool_input
+                                        }
+                                        
+                                        # Get display info for this tool
+                                        emoji, action, display_fields = self._get_tool_display_info(tool_name, tool_input)
+                                        
+                                        # Special handling for sequential thinking
+                                        if "sequential-thinking" in tool_name and "thoughtNumber" in tool_input:
+                                            thought_num = tool_input.get("thoughtNumber", "?")
+                                            total_thoughts = tool_input.get("totalThoughts", "?")
+                                            print(f"\n{emoji} Thinking Step {thought_num}/{total_thoughts}:", file=sys.stderr)
+                                            if "thought" in tool_input and tool_input["thought"]:
+                                                print(f"   {tool_input['thought']}", file=sys.stderr)
+                                        else:
+                                            # Standard tool display
+                                            print(f"\n{emoji} Claude wants to {action}: {tool_name}", file=sys.stderr)
+                                            
+                                            # Display relevant fields
+                                            if display_fields:
+                                                for field_key, field_label in display_fields.items():
+                                                    if field_key in tool_input and tool_input[field_key]:
+                                                        value = tool_input[field_key]
+                                                        # Truncate long values
+                                                        if isinstance(value, str) and len(value) > 100:
+                                                            value = value[:100] + "..."
+                                                        elif isinstance(value, (list, dict)):
+                                                            value = f"[{type(value).__name__} with {len(value)} items]"
+                                                        print(f"   {field_label}: {value}", file=sys.stderr)
+                                            else:
+                                                # If no specific fields defined, show all non-empty fields
+                                                for key, value in tool_input.items():
+                                                    if value and key not in ["tool_name"]:
+                                                        if isinstance(value, str) and len(value) > 100:
+                                                            value = value[:100] + "..."
+                                                        elif isinstance(value, (list, dict)):
+                                                            value = f"[{type(value).__name__} with {len(value)} items]"
+                                                        print(f"   {key}: {value}", file=sys.stderr)
+                        
                         elif isinstance(content, str):
+                            # String content - display normally
+                            if kwargs.get('verbose'):
+                                print(f"[DEBUG] String content: {repr(content)}\n", file=sys.stderr)
                             content_parts.append(content)
                             print(content, end="", flush=True)
                 
@@ -224,12 +391,18 @@ class ClaudeCLI:
                                 print(f"   MCP Servers: {', '.join([s['name'] for s in mcp_servers])}", file=sys.stderr)
                         
                 elif event_type == "result":
-                    if kwargs.get('verbose'):
-                        status = event.get("status", "unknown")
+                    subtype = event.get("subtype", "")
+                    if subtype == "error_max_turns":
+                        print(f"\n⚠️  Maximum turns reached", file=sys.stderr)
+                    elif kwargs.get('verbose'):
+                        status = event.get("subtype", "unknown")
                         print(f"\n🏁 Status: {status}", file=sys.stderr)
-                        stats = event.get("stats", {})
-                        if stats:
-                            print(f"📊 Stats: {stats}", file=sys.stderr)
+                        if 'cost_usd' in event:
+                            print(f"   Cost: ${event['cost_usd']:.4f}", file=sys.stderr)
+                        if 'duration_ms' in event:
+                            print(f"   Duration: {event['duration_ms']/1000:.2f}s", file=sys.stderr)
+                        if 'num_turns' in event:
+                            print(f"   Turns: {event['num_turns']}", file=sys.stderr)
                 
                 else:
                     # Catch unhandled event types to prevent raw JSON output
@@ -603,9 +776,20 @@ def main():
     
     # Set logging level based on verbosity
     if args.quiet:
-        cli.logger.setLevel(logging.ERROR)
+        # Suppress almost everything
+        logging.getLogger().setLevel(logging.CRITICAL)
+        cli.logger.setLevel(logging.CRITICAL)
     elif args.verbose:
+        # Enable verbose logging
+        logging.getLogger().setLevel(logging.INFO)
+        logging.getLogger('claude_code_wrapper').setLevel(logging.INFO)
         cli.logger.setLevel(logging.DEBUG)
+        # Set up a proper format for verbose mode
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
+            force=True
+        )
     
     # Build configuration from all sources
     config_dict = {}
@@ -627,6 +811,11 @@ def main():
     approval_config = cli._build_approval_config(args)
     if approval_config:
         config_dict['mcp_auto_approval'] = approval_config
+    
+    # Disable logging by default unless verbose is set
+    if not args.verbose:
+        config_dict['enable_logging'] = False
+        config_dict['log_level'] = logging.CRITICAL
     
     # Load configuration with all settings
     cli.config = ClaudeCodeConfig.from_dict(config_dict) if config_dict else ClaudeCodeConfig()

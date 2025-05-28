@@ -240,9 +240,9 @@ class ClaudeCodeConfig:
     verbose: bool = False
     
     # Streaming timeout settings (industry best practices)
-    streaming_idle_timeout: Optional[float] = 30.0  # Reset on each event
+    streaming_idle_timeout: Optional[float] = 60.0  # Reset on each event (increased)
     streaming_max_timeout: Optional[float] = 600.0  # 10 min absolute max
-    streaming_initial_timeout: Optional[float] = 60.0  # Time to first event
+    streaming_initial_timeout: Optional[float] = 120.0  # Time to first event (increased)
     
     # Model selection
     model: Optional[str] = None  # opus, sonnet, haiku, or full model name
@@ -669,7 +669,7 @@ class ClaudeCodeWrapper:
                 f"Claude binary not found or not executable: {self.config.claude_binary}"
             ) from e
     
-    def run(self, query: str, output_format: OutputFormat = OutputFormat.TEXT, 
+    def run(self, query: str, output_format: OutputFormat = OutputFormat.JSON, 
             **kwargs) -> ClaudeCodeResponse:
         """
         Execute Claude Code with comprehensive error handling.
@@ -767,6 +767,13 @@ class ClaudeCodeWrapper:
             response.returncode = result.returncode
             response.stderr = result.stderr
             response.execution_time = time.time() - start_time
+            
+            # Track session ID if present
+            if response.session_id:
+                self._session_state["last_session_id"] = response.session_id
+            elif config.continue_session and self._session_state.get("last_session_id"):
+                # When using --continue, preserve the last known session ID
+                response.session_id = self._session_state["last_session_id"]
             
             # Update metrics
             if config.enable_metrics:
@@ -876,11 +883,14 @@ class ClaudeCodeWrapper:
                         time_since_activity = current_time - last_activity
                         
                         # Phase 1: Initial timeout (time to first event)
-                        if time_since_start < config.streaming_initial_timeout and time_since_activity < config.streaming_initial_timeout:
+                        # During initial phase, allow more time for first event
+                        if time_since_start < config.streaming_initial_timeout:
+                            # Still in initial phase, don't check idle timeout yet
                             time.sleep(1)
                             continue
                         
                         # Phase 2: Idle timeout (reset on each event)
+                        # Only check idle timeout after initial phase
                         if time_since_activity > config.streaming_idle_timeout:
                             if process and process.poll() is None:
                                 self.logger.warning(f"Streaming idle timeout after {time_since_activity:.1f}s, terminating")
@@ -1018,7 +1028,7 @@ class ClaudeCodeWrapper:
         
         if output_format == OutputFormat.STREAM_JSON:
             cmd.extend(["--output-format", output_format.value])
-            cmd.append("--verbose")  # Required by Claude Code for streaming JSON
+            cmd.append("--verbose")  # Required by Claude Code for streaming JSON with --print
         elif output_format != OutputFormat.TEXT:
             cmd.extend(["--output-format", output_format.value])
         
@@ -1238,6 +1248,23 @@ class ClaudeCodeWrapper:
             # Update session ID if returned
             if response.session_id:
                 self._session_state["last_session_id"] = response.session_id
+            else:
+                # When using --continue, Claude doesn't return session_id
+                # So we preserve the last known session ID in the response
+                last_session_id = self._session_state.get("last_session_id")
+                if last_session_id:
+                    # Create a new response with the preserved session_id
+                    response = ClaudeCodeResponse(
+                        content=response.content,
+                        returncode=response.returncode,
+                        session_id=last_session_id,  # Preserve the session ID
+                        is_error=response.is_error,
+                        error_type=response.error_type,
+                        error_subtype=response.error_subtype,
+                        metrics=response.metrics,
+                        metadata=response.metadata,
+                        raw_output=response.raw_output
+                    )
             return response
         finally:
             self.config.continue_session = original_continue

@@ -1,0 +1,20 @@
+2025-05-27 22:05:29,024 - __main__ - INFO - [production_example.py:401] - 🚀 Starting Claude Code SDK Wrapper - Production Demo
+2025-05-27 22:05:29,024 - __main__ - INFO - [production_example.py:402] - ============================================================
+2025-05-27 22:05:29,024 - __main__ - INFO - [production_example.py:50] - === Basic Usage Examples ===
+2025-05-27 22:05:29,024 - __main__ - INFO - [production_example.py:53] - 1. Simple text query:
+2025-05-27 22:05:29,353 - claude_code_wrapper - INFO - [claude_code_wrapper.py:640] - Claude Code Wrapper initialized with config: ClaudeCodeConfig(claude_binary='claude', timeout=300.0, max_turns=None, verbose=False, streaming_idle_timeout=60.0, streaming_max_timeout=600.0, streaming_initial_timeout=120.0, model=None, temperature=None, max_tokens=None, top_p=None, stop_sequences=[], session_id=None, continue_session=False, system_prompt=None, append_system_prompt=None, allowed_tools=[], disallowed_tools=[], mcp_config_path=None, mcp_config=None, permission_prompt_tool=None, mcp_allowed_servers=[], mcp_scope=None, use_existing_mcp_servers=True, mcp_auto_approval={}, working_directory=None, environment_vars={}, max_retries=3, retry_delay=1.0, retry_backoff_factor=2.0, enable_metrics=True, log_level=20, cache_responses=False, cache_ttl=1800.0)
+2025-05-27 22:05:35,338 - claude_code_wrapper - INFO - [claude_code_wrapper.py:782] - Command executed successfully in 5.98s
+2025-05-27 22:05:35,338 - __main__ - INFO - [production_example.py:56] - ✅ Success - Content: Python is a high-level, interpreted programming language known for its simple, readable syntax. It s...
+2025-05-27 22:05:35,339 - __main__ - INFO - [production_example.py:57] -    Session ID: fbaf7250-33d2-42be-8c60-921a23e310ce
+2025-05-27 22:05:35,339 - __main__ - INFO - [production_example.py:58] -    Execution time: 5.98s
+2025-05-27 22:05:35,339 - __main__ - INFO - [production_example.py:69] - 2. JSON format query:
+2025-05-27 22:05:35,676 - claude_code_wrapper - INFO - [claude_code_wrapper.py:640] - Claude Code Wrapper initialized with config: ClaudeCodeConfig(claude_binary='claude', timeout=300.0, max_turns=None, verbose=False, streaming_idle_timeout=60.0, streaming_max_timeout=600.0, streaming_initial_timeout=120.0, model=None, temperature=None, max_tokens=None, top_p=None, stop_sequences=[], session_id=None, continue_session=False, system_prompt=None, append_system_prompt=None, allowed_tools=[], disallowed_tools=[], mcp_config_path=None, mcp_config=None, permission_prompt_tool=None, mcp_allowed_servers=[], mcp_scope=None, use_existing_mcp_servers=True, mcp_auto_approval={}, working_directory=None, environment_vars={}, max_retries=3, retry_delay=1.0, retry_backoff_factor=2.0, enable_metrics=True, log_level=20, cache_responses=False, cache_ttl=1800.0)
+2025-05-27 22:05:41,457 - claude_code_wrapper - INFO - [claude_code_wrapper.py:782] - Command executed successfully in 5.78s
+2025-05-27 22:05:41,458 - __main__ - INFO - [production_example.py:72] - ✅ JSON Success - Content: Machine learning is a branch of artificial intelligence where computers learn patterns from data to ...
+2025-05-27 22:05:41,458 - __main__ - INFO - [production_example.py:73] -    Session ID: ca1b31b1-c1a1-4ea3-a6e0-c38be836b076
+2025-05-27 22:05:41,458 - __main__ - INFO - [production_example.py:74] -    Metrics: Cost=$0.3154, Duration=4069ms
+2025-05-27 22:05:41,458 - __main__ - INFO - [production_example.py:75] -    Turns: 1
+2025-05-27 22:05:41,458 - __main__ - INFO - [production_example.py:90] - === Advanced Configuration ===
+2025-05-27 22:05:41,634 - __main__ - INFO - [production_example.py:424] - Demo interrupted by user
+2025-05-27 22:05:41,634 - __main__ - INFO - [production_example.py:430] - ============================================================
+2025-05-27 22:05:41,634 - __main__ - INFO - [production_example.py:431] - 🏁 Demo completed. Check claude_wrapper.log for detailed logs.

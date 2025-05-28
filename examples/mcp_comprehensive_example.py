@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Comprehensive MCP integration example showing best practices."""
 
-from pathlib import Path
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from claude_code_wrapper import ClaudeCodeWrapper, ClaudeCodeConfig
 
 print("🔍 MCP Integration - Best Practices Example")
