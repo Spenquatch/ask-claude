@@ -1,5 +1,5 @@
 """
-Session Management for Claude Code Wrapper
+Session Manager for Claude Code Wrapper
 
 Enhanced session features for autonomous development pipelines:
 1. Session persistence (save/load from disk)
