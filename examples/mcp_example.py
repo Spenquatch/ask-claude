@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 """
-Example: Using MCP (Model Context Protocol) with Claude Code Wrapper.
+Comprehensive MCP (Model Context Protocol) Examples for Claude Code Wrapper
 
-This example demonstrates how to configure and use MCP servers to extend
-Claude's capabilities with external tools and data sources.
+This example demonstrates:
+1. Basic MCP setup and configuration
+2. Programmatic MCP configuration
+3. Auto-approval strategies
+4. Tool permissions and security
+5. Session management with MCP
+6. Production best practices
 """
 
 import os
 import json
 import sys
-import os
+import shutil
+from pathlib import Path
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from claude_code_wrapper import (
@@ -20,71 +27,38 @@ from claude_code_wrapper import (
 )
 
 
-def create_example_mcp_config():
-    """Create an example MCP configuration file."""
-    config = {
-        "mcpServers": {
-            "filesystem": {
-                "command": "npx",
-                "args": [
-                    "-y",
-                    "@modelcontextprotocol/server-filesystem",
-                    # Restrict to current directory for safety
-                    str(Path.cwd())
-                ]
-            }
-        }
-    }
-    
-    config_path = Path("example-mcp-config.json")
-    with open(config_path, 'w') as f:
-        json.dump(config, f, indent=2)
-    
-    print(f"Created example MCP config at: {config_path}")
-    return config_path
-
-
 def example_basic_mcp_usage():
     """Basic example of using MCP with the wrapper."""
-    print("\n=== Basic MCP Usage ===\n")
+    print("\n=== Basic MCP Usage ===")
     
-    # Create example config
-    config_path = create_example_mcp_config()
+    # Use pre-configured MCP servers (recommended for production)
+    config = ClaudeCodeConfig(
+        allowed_tools=[
+            "mcp__sequential-thinking__sequentialthinking",
+            "mcp__deepwiki__deepwiki_fetch"
+        ],
+        verbose=False,
+        timeout=120
+    )
     
-    try:
-        # Initialize wrapper with MCP config
-        config = ClaudeCodeConfig(
-            mcp_config_path=config_path,
-            # Important: We need to allow the MCP tools
-            allowed_tools=["mcp__filesystem__list_directory"]
-        )
-        wrapper = ClaudeCodeWrapper(config)
-        
-        # Check loaded servers
-        servers = wrapper.get_mcp_servers()
-        print(f"Loaded MCP servers: {list(servers.keys())}")
-        
-        # Get available tools
-        tools = wrapper.get_mcp_tools("filesystem")
-        print(f"Available filesystem tools: {tools[:3]}...")  # Show first 3
-        
-        # Make a query that uses MCP
-        print("\nMaking query with MCP access...")
-        response = wrapper.ask(
-            "List the files in the current directory"
-        )
-        print(f"Response: {response.content[:200]}...")
-        
-    finally:
-        # Cleanup
-        if config_path.exists():
-            config_path.unlink()
-            print("\nCleaned up example config file")
+    wrapper = ClaudeCodeWrapper(config)
+    
+    # List available MCP servers
+    print("Checking available MCP servers...")
+    server_list = wrapper.list_available_mcp_servers()
+    print(f"Available servers: {server_list.content[:200]}...")
+    
+    # Test with sequential thinking
+    print("\nTesting sequential-thinking tool:")
+    response = wrapper.ask(
+        "Use the sequential thinking tool to analyze: What are the steps to debug a Python script?"
+    )
+    print(f"Response preview: {response.content[:200]}...")
 
 
 def example_programmatic_mcp_config():
     """Example of creating MCP configuration programmatically."""
-    print("\n=== Programmatic MCP Configuration ===\n")
+    print("\n=== Programmatic MCP Configuration ===")
     
     # Create wrapper
     wrapper = ClaudeCodeWrapper()
@@ -96,7 +70,7 @@ def example_programmatic_mcp_config():
         args=[
             "-y",
             "@modelcontextprotocol/server-filesystem",
-            "/tmp"  # Restrict to /tmp for safety
+            str(Path.cwd())  # Restrict to current directory
         ]
     )
     
@@ -128,18 +102,71 @@ def example_programmatic_mcp_config():
         print(json.dumps(json.load(f), indent=2))
     
     # Cleanup
-    config_path.unlink()
+    if config_path.exists():
+        config_path.unlink()
+
+
+def example_auto_approval_allowlist():
+    """Example using allowlist auto-approval strategy."""
+    print("\n=== Auto-Approval: Allowlist Strategy ===")
+    
+    config = ClaudeCodeConfig(
+        mcp_auto_approval={
+            "enabled": True,
+            "strategy": "allowlist",
+            "allowlist": [
+                "mcp__sequential-thinking__sequentialthinking",
+                "mcp__filesystem__read_file",
+                "mcp__filesystem__list_directory"
+            ]
+        }
+    )
+    
+    wrapper = ClaudeCodeWrapper(config)
+    
+    print("Auto-approving only specific tools...")
+    response = wrapper.ask(
+        "Use the sequential thinking tool to plan a simple web application"
+    )
+    print(f"Response: {response.content[:200]}...")
+
+
+def example_auto_approval_patterns():
+    """Example using pattern-based auto-approval strategy."""
+    print("\n=== Auto-Approval: Pattern Strategy ===")
+    
+    config = ClaudeCodeConfig(
+        mcp_auto_approval={
+            "enabled": True,
+            "strategy": "patterns",
+            "allow_patterns": [
+                r"mcp__.*__read.*",      # Allow all read operations
+                r"mcp__.*__list.*",      # Allow all list operations
+                r"mcp__.*__get.*"        # Allow all get operations
+            ],
+            "deny_patterns": [
+                r"mcp__.*__write.*",     # Deny all write operations
+                r"mcp__.*__delete.*",    # Deny all delete operations
+                r"mcp__.*__modify.*"     # Deny all modify operations
+            ]
+        }
+    )
+    
+    wrapper = ClaudeCodeWrapper(config)
+    
+    print("Auto-approving based on patterns (read-only operations)...")
+    response = wrapper.ask(
+        "Read the contents of README.md"
+    )
+    print(f"Response: {response.content[:200]}...")
 
 
 def example_tool_permissions():
     """Example of managing MCP tool permissions."""
-    print("\n=== MCP Tool Permissions ===\n")
+    print("\n=== MCP Tool Permissions ===")
     
-    # Create wrapper with empty config
     wrapper = ClaudeCodeWrapper()
     
-    # Simulate having MCP servers
-    # In reality, these would be loaded from mcp_config
     print("Managing tool permissions...")
     
     # Allow all tools from a server
@@ -161,7 +188,7 @@ def example_tool_permissions():
 
 def example_security_patterns():
     """Example of security best practices with MCP."""
-    print("\n=== MCP Security Patterns ===\n")
+    print("\n=== MCP Security Patterns ===")
     
     # Pattern 1: Role-based access
     def create_wrapper_for_role(role: str) -> ClaudeCodeWrapper:
@@ -191,7 +218,7 @@ def example_security_patterns():
     guest_wrapper = create_wrapper_for_role("guest")
     
     # Pattern 2: Environment-based configuration
-    def get_mcp_config_for_env(env: str) -> Path:
+    def get_mcp_config_for_env(env: str) -> str:
         """Get appropriate MCP config for environment."""
         configs = {
             "development": "mcp-dev.json",
@@ -200,7 +227,7 @@ def example_security_patterns():
         }
         config_file = configs.get(env, "mcp-dev.json")
         print(f"Using MCP config for {env}: {config_file}")
-        return Path(config_file)
+        return config_file
     
     # Example usage
     env = os.environ.get("ENVIRONMENT", "development")
@@ -209,13 +236,16 @@ def example_security_patterns():
 
 def example_mcp_with_sessions():
     """Example of using MCP with sessions."""
-    print("\n=== MCP with Sessions ===\n")
+    print("\n=== MCP with Sessions ===")
     
-    # Create wrapper with simulated MCP
-    wrapper = ClaudeCodeWrapper()
-    
-    # Enable filesystem tools
-    wrapper.allow_mcp_tools("filesystem", ["read_file", "write_file"])
+    config = ClaudeCodeConfig(
+        allowed_tools=[
+            "mcp__filesystem__read_file",
+            "mcp__filesystem__write_file",
+            "mcp__sequential-thinking__sequentialthinking"
+        ]
+    )
+    wrapper = ClaudeCodeWrapper(config)
     
     print("Starting session with MCP tools...")
     with wrapper.session() as session:
@@ -228,56 +258,173 @@ def example_mcp_with_sessions():
         print("\n2. Analyzing content...")
         response2 = session.ask("What version is specified in the file?")
         
-        print("\n3. Making changes...")
-        response3 = session.ask("Update the version to 2.0.0")
+        print("\n3. Using sequential thinking...")
+        response3 = session.ask("Use sequential thinking to plan version update steps")
         
         print("\nSession completed with MCP tool access throughout")
 
 
-def example_mcp_tool_discovery():
-    """Example of discovering available MCP tools."""
-    print("\n=== MCP Tool Discovery ===\n")
+def example_dynamic_approval():
+    """Example of dynamically changing approval strategy."""
+    print("\n=== Dynamic Approval Example ===")
     
     wrapper = ClaudeCodeWrapper()
     
-    # Simulate different server types
-    server_types = ["filesystem", "github", "database", "custom_api"]
+    # Start with restrictive approval
+    print("1. Restrictive mode - only read operations allowed:")
+    response = wrapper.ask(
+        "List files in the current directory",
+        mcp_auto_approval={
+            "enabled": True,
+            "strategy": "patterns",
+            "allow_patterns": [r"mcp__.*__read.*", r"mcp__.*__list.*"]
+        }
+    )
+    print(f"Response: {response.content[:200]}...")
     
-    for server in server_types:
-        tools = wrapper.get_mcp_tools(server)
-        if tools:
-            print(f"\n{server} server tools:")
-            for tool in tools[:3]:  # Show first 3
-                print(f"  - {tool}")
-            if len(tools) > 3:
-                print(f"  ... and {len(tools) - 3} more")
+    # Switch to more permissive approval
+    print("\n2. Using allowlist for specific tools:")
+    response = wrapper.ask(
+        "Use sequential thinking to analyze the file structure",
+        mcp_auto_approval={
+            "enabled": True,
+            "strategy": "allowlist",
+            "allowlist": ["mcp__sequential-thinking__sequentialthinking"]
+        }
+    )
+    print(f"Response: {response.content[:200]}...")
+
+
+def example_cli_usage():
+    """Example showing CLI usage with MCP auto-approval."""
+    print("\n=== CLI Usage Examples ===")
+    
+    print("1. Using allowlist strategy:")
+    print("""
+    python cli_tool.py ask "Use sequential thinking to plan a task" \\
+        --approval-strategy allowlist \\
+        --approval-allowlist "mcp__sequential-thinking__*" "mcp__filesystem__read*"
+    """)
+    
+    print("\n2. Using pattern strategy:")
+    print("""
+    python cli_tool.py ask "Read project files" \\
+        --approval-strategy patterns \\
+        --approval-allow-patterns "mcp__.*__read.*" "mcp__.*__list.*" \\
+        --approval-deny-patterns "mcp__.*__write.*"
+    """)
+    
+    print("\n3. Interactive session with approval:")
+    print("""
+    python cli_tool.py session --interactive \\
+        --approval-strategy allowlist \\
+        --approval-allowlist "mcp__sequential-thinking__*"
+    """)
+    
+    print("\n4. Streaming with auto-approval:")
+    print("""
+    python cli_tool.py stream "Analyze this codebase" \\
+        --approval-strategy all
+    """)
+
+
+def example_production_best_practices():
+    """Production deployment best practices."""
+    print("\n=== Production Best Practices ===")
+    
+    print("1. Server Configuration:")
+    print("   • Use 'claude mcp add' to configure servers globally/per-project")
+    print("   • Scope: 'user' (global), 'project' (.mcp.json), or 'local'")
+    print("   • Store sensitive configs in environment variables")
+    
+    print("\n2. Security:")
+    print("   • Always specify allowed_tools explicitly")
+    print("   • Use least-privilege principle")
+    print("   • Regularly audit tool permissions")
+    print("   • Use allowlist or pattern strategies, avoid 'all'")
+    
+    print("\n3. Configuration Management:")
+    print("   • Environment-specific configs (dev/staging/prod)")
+    print("   • Version control MCP configs (without secrets)")
+    print("   • Use JSON schema validation")
+    
+    print("\n4. Monitoring:")
+    print("   • Log MCP tool usage")
+    print("   • Monitor approval patterns")
+    print("   • Track performance metrics")
+    
+    # Example production config
+    prod_config = {
+        "mcp_auto_approval": {
+            "enabled": True,
+            "strategy": "allowlist",
+            "allowlist": [
+                "mcp__sequential-thinking__sequentialthinking",
+                "mcp__filesystem__read_file",
+                "mcp__filesystem__list_directory"
+            ]
+        },
+        "allowed_tools": [
+            "mcp__sequential-thinking__sequentialthinking",
+            "mcp__filesystem__read_file"
+        ],
+        "timeout": 300,
+        "max_retries": 3,
+        "cache_responses": True
+    }
+    
+    print(f"\nExample production config:")
+    print(json.dumps(prod_config, indent=2))
 
 
 def main():
     """Run all MCP examples."""
-    print("=== Claude Code Wrapper - MCP Examples ===")
+    print("=== Claude Code Wrapper - Comprehensive MCP Examples ===")
+    print("=" * 70)
     
     # Check if npx is available (required for most MCP servers)
-    import shutil
     if not shutil.which("npx"):
         print("\nWARNING: 'npx' not found. Install Node.js to use MCP servers.")
         print("Examples will show MCP patterns but may not execute actual servers.\n")
     
-    # Run examples
-    example_basic_mcp_usage()
-    example_programmatic_mcp_config()
-    example_tool_permissions()
-    example_security_patterns()
-    example_mcp_with_sessions()
-    example_mcp_tool_discovery()
+    try:
+        # Core examples
+        example_basic_mcp_usage()
+        example_programmatic_mcp_config()
+        
+        # Auto-approval examples
+        example_auto_approval_allowlist()
+        example_auto_approval_patterns()
+        
+        # Security and permissions
+        example_tool_permissions()
+        example_security_patterns()
+        
+        # Advanced usage
+        example_mcp_with_sessions()
+        example_dynamic_approval()
+        
+        # CLI and production
+        example_cli_usage()
+        example_production_best_practices()
+        
+    except Exception as e:
+        print(f"\nError running examples: {e}")
+        print("\nMake sure you have:")
+        print("• MCP servers configured ('claude mcp list' to check)")
+        print("• Required MCP server dependencies installed")
+        print("• Appropriate permissions for tool usage")
     
-    print("\n=== MCP Integration Complete ===")
+    print("\n" + "=" * 70)
+    print("MCP Integration Complete")
     print("\nKey Takeaways:")
     print("• MCP extends Claude with external tools and data sources")
+    print("• Use pre-configured servers for production reliability")
     print("• Always explicitly allow required tools for security")
-    print("• Use role-based and environment-based access control")
+    print("• Implement role-based and environment-based access control")
     print("• MCP servers must be trusted - they can access external resources")
     print("• Tool names follow pattern: mcp__<server>__<tool>")
+    print("• Use auto-approval strategies to reduce manual intervention")
 
 
 if __name__ == "__main__":

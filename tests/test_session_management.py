@@ -17,7 +17,7 @@ from claude_code_wrapper import (
     ClaudeCodeWrapper, ClaudeCodeConfig, ClaudeCodeResponse, ClaudeCodeSession,
     continue_claude, resume_claude, ask_claude_with_session
 )
-from session_enhancements import (
+from session_manager import (
     SessionManager, SessionTemplate, AutoRecoverySession
 )
 

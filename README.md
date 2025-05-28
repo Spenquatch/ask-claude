@@ -1,204 +1,151 @@
 # Claude Code SDK Wrapper
 
-**Enterprise-grade Python wrapper for Claude Code SDK with comprehensive error handling, session management, and production-ready features.**
+A lightweight Python wrapper for the Claude Code CLI that adds enterprise features like error handling, session management, and MCP auto-approval—all with zero dependencies.
 
-## 🚀 Quick Start
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Features
+
+- 🚀 **Simple API** - One-line queries with `ask_claude()`
+- 🔄 **Automatic Retries** - Built-in resilience with exponential backoff
+- 💬 **Session Management** - Multi-turn conversations with context
+- 🤖 **MCP Auto-Approval** - Bypass manual tool approval prompts
+- 🌊 **Streaming Support** - Real-time response streaming
+- 📦 **Zero Dependencies** - Uses only Python standard library
+- 🛡️ **Enterprise Ready** - Comprehensive error handling and logging
+
+## Installation
+
+```bash
+# 1. Install Claude Code CLI first (see Anthropic docs)
+# 2. Clone this wrapper
+git clone <repository-url>
+cd ask_claude
+
+# 3. Verify it works
+python getting_started.py
+```
+
+## Quick Start
 
 ```python
-from claude_code_wrapper import ask_claude, ask_claude_json
+from claude_code_wrapper import ask_claude
 
-# Simple text query
+# Simple query
 response = ask_claude("What is Python?")
 print(response.content)
 
-# JSON response with metadata
-response = ask_claude_json("Explain machine learning briefly")
-print(f"Content: {response.content}")
-print(f"Cost: ${response.metrics.cost_usd:.6f}")
-print(f"Session: {response.session_id}")
+# With model selection
+response = ask_claude("Write a haiku", model="opus")
+print(response.content)
 ```
 
-## 🌟 Key Features
+## Common Use Cases
 
-- **🛡️ Enterprise Error Handling**: Graceful degradation with comprehensive exception hierarchy
-- **📊 Session Management**: Multi-turn conversations with state tracking
-- **🌊 Streaming Support**: Real-time streaming responses with error recovery
-- **✅ Input Validation**: Comprehensive request validation and sanitization
-- **🔧 CLI Tool**: Production-ready command-line interface
-- **📦 Zero Dependencies**: Uses only Python standard library
-- **🔄 Resilience**: Automatic retries with exponential backoff
-- **🤖 MCP Auto-Approval**: Programmatic approval of MCP tools without manual prompts
-
-## 📋 Quick Links
-
-- [Installation Guide](docs/installation.md)
-- [Configuration](docs/configuration.md)
-- [Usage Examples](docs/usage-examples.md)
-- [API Reference](docs/api-reference.md)
-- [CLI Documentation](docs/cli-usage.md)
-- [MCP Integration](docs/mcp-integration.md)
-- [Production Deployment](docs/production.md)
-- [Error Handling](docs/error-handling.md)
-
-## 📦 Installation
+### CLI Usage
 
 ```bash
-# Install Claude Code CLI first (follow official documentation)
-# Then clone this wrapper
-git clone <repository-url>
-cd ask_claude
-pip install -r requirements.txt
+# Ask a question
+python cli_tool.py ask "What is Python?"
+
+# Stream a response
+python cli_tool.py stream "Write a story"
+
+# Interactive session
+python cli_tool.py session -i
 ```
 
-## 🔧 Basic Usage
+### Session Management
 
-### Simple Queries
 ```python
 from claude_code_wrapper import ClaudeCodeWrapper
 
 wrapper = ClaudeCodeWrapper()
-response = wrapper.run("What is 2+2?")
-print(response.content)  # "4"
-```
-
-### Session Management
-```python
-# Multi-turn conversation
 with wrapper.session() as session:
-    response1 = session.ask("I need help with Python.")
-    response2 = session.ask("How do I read CSV files?")
-    response3 = session.ask("Can you show an example?")
+    session.ask("I need help with Python")
+    session.ask("How do I read CSV files?")
+    response = session.ask("Show me an example")
 ```
 
-### CLI Usage
-```bash
-# Ask a question
-python cli_tool.py ask "What is Python?" --format json
-
-# Start interactive session
-python cli_tool.py session --interactive
-
-# Stream a response
-python cli_tool.py stream "Write a tutorial"
-
-# Check health
-python cli_tool.py health
-```
-
-## 🧪 Testing
-
-Run the demonstration script to verify everything works:
-
-```bash
-python getting_started.py
-```
-
-For production usage examples:
-
-```bash
-python production_example.py
-```
-
-## 🤖 MCP Auto-Approval (New!)
-
-Enable automatic approval of MCP (Model Context Protocol) tools without manual prompts:
+### MCP Auto-Approval
 
 ```python
-from claude_code_wrapper import ClaudeCodeWrapper, ClaudeCodeConfig
-from pathlib import Path
+from claude_code_wrapper import ClaudeCodeConfig, ClaudeCodeWrapper
 
-# Auto-approve all MCP tools (development)
+# Auto-approve specific tools
 config = ClaudeCodeConfig(
-    mcp_config_path=Path("mcp-servers.json"),
-    mcp_auto_approval={
-        "enabled": True,
-        "strategy": "all"
-    }
-)
-
-# Auto-approve specific tools only (production)
-config = ClaudeCodeConfig(
-    mcp_config_path=Path("mcp-servers.json"),
     mcp_auto_approval={
         "enabled": True,
         "strategy": "allowlist",
-        "allowlist": ["mcp__filesystem__read_file", "mcp__database__query"]
-    }
-)
-
-# Pattern-based approval (advanced)
-config = ClaudeCodeConfig(
-    mcp_config_path=Path("mcp-servers.json"),
-    mcp_auto_approval={
-        "enabled": True,
-        "strategy": "patterns",
-        "allow_patterns": ["mcp__.*__read.*", "mcp__.*__list.*"],
-        "deny_patterns": ["mcp__.*__write.*", "mcp__.*__delete.*"]
+        "allowlist": ["mcp__filesystem__read_file"]
     }
 )
 
 wrapper = ClaudeCodeWrapper(config)
+response = wrapper.ask("Read the README.md file")
 ```
 
-### CLI Usage
-
-```bash
-# Auto-approve all tools
-python cli_tool.py ask "Analyze the codebase" \
-    --mcp-config mcp-servers.json \
-    --approval-strategy all
-
-# Allowlist specific tools
-python cli_tool.py stream "Read project documentation" \
-    --mcp-config mcp-servers.json \
-    --approval-strategy allowlist \
-    --approval-allowlist "mcp__filesystem__read_file" "mcp__filesystem__list_directory"
-```
-
-## 📁 Project Structure
-
-```
-ask_claude/
-├── claude_code_wrapper.py    # Main wrapper library
-├── cli_tool.py              # Command-line interface
-├── getting_started.py       # Demo and test script
-├── production_example.py    # Production usage examples
-├── config_examples.json     # Configuration examples
-├── requirements.txt         # Dependencies
-├── docs/                    # Documentation
-└── safe_to_delete/         # Redundant files (safe to remove)
-```
-
-## 🛡️ Error Handling
-
-The wrapper provides comprehensive error handling:
+### Error Handling
 
 ```python
 from claude_code_wrapper import ClaudeCodeError, ClaudeCodeTimeoutError
 
 try:
-    response = wrapper.run("Complex query", timeout=30.0)
-    if response.is_error:
-        print(f"Response error: {response.error_type}")
-    else:
-        print(response.content)
+    response = wrapper.ask("Complex query", timeout=30.0)
+    print(response.content)
 except ClaudeCodeTimeoutError:
-    print("Query timed out")
+    print("Request timed out")
 except ClaudeCodeError as e:
     print(f"Error: {e}")
 ```
 
-## 🤝 Contributing
+## Documentation
 
-1. Check the current implementation works: `python getting_started.py`
-2. Make your changes
-3. Test thoroughly
-4. Update documentation as needed
+| Guide | Description |
+|-------|-------------|
+| [Configuration](docs/configuration.md) | All configuration options |
+| [API Reference](docs/api-reference.md) | Complete API documentation |
+| [MCP Integration](docs/mcp-integration.md) | Using MCP tools and auto-approval |
+| [CLI Usage](docs/cli-usage.md) | Command-line interface guide |
+| [Examples](examples/) | Working code examples |
 
-## 📄 License
+## Project Structure
 
-MIT License - see LICENSE file for details.
+```
+ask_claude/
+├── claude_code_wrapper.py   # Main wrapper module
+├── cli_tool.py             # CLI interface
+├── approval_strategies.py   # MCP approval logic
+├── docs/                   # Documentation
+├── examples/               # Example scripts
+└── tests/                  # Test suite
+```
+
+## Requirements
+
+- Python 3.9+
+- Claude Code CLI installed
+- No Python dependencies (stdlib only)
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Support
+
+- 📖 [Documentation](docs/)
+- 🐛 [Issues](https://github.com/yourusername/ask_claude/issues)
+- 💬 [Discussions](https://github.com/yourusername/ask_claude/discussions)
 
 ---
 
-**Built for Production** | **Zero Dependencies** | **Enterprise Ready**
+Built with ❤️ for the Claude community

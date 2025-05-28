@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "memory-bank": {
-      "command": "npx",
-      "args": ["-y", "@aakarsh-sasi/memory-bank-mcp", "--mode code"]
-    }
-  }
-}

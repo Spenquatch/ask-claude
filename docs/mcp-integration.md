@@ -534,7 +534,7 @@ claude ask "Help me debug this" \
 export APPROVAL_STRATEGY=allowlist
 export APPROVAL_ALLOWLIST="mcp__filesystem__read_file,mcp__github__get_repository"
 
-# The configurable_approval_server.py reads these automatically
+# The approval_server.py reads these automatically
 ```
 
 ### Security Considerations for Auto-Approval

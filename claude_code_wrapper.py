@@ -1131,7 +1131,7 @@ class ClaudeCodeWrapper:
             # Add configurable approval server with environment variable
             combined_config["mcpServers"]["approval-server"] = {
                 "command": sys.executable,
-                "args": [str(Path(__file__).parent / "configurable_approval_server.py")],
+                "args": [str(Path(__file__).parent / "approval_server.py")],
                 "env": {
                     "APPROVAL_STRATEGY_CONFIG": json.dumps(strategy_config),
                     "APPROVAL_LOG_PATH": str(Path(tempfile.gettempdir()) / f"approval_log_{os.getpid()}.txt")

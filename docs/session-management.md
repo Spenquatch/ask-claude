@@ -84,7 +84,7 @@ response = ask_claude_with_session("Fix the bug", session_id="abc-123")
 ### Save and Load Sessions
 
 ```python
-from session_enhancements import SessionManager
+from session_manager import SessionManager
 
 # Initialize session manager
 session_mgr = SessionManager(".claude_sessions")
@@ -163,7 +163,7 @@ restored = session_mgr.restore_checkpoint(checkpoint1)
 Use predefined templates for common tasks:
 
 ```python
-from session_enhancements import SessionTemplate
+from session_manager import SessionTemplate
 
 # Start a code review session
 review_session = SessionTemplate.create_from_template("code_review", wrapper)
@@ -196,7 +196,7 @@ merged = session_mgr.merge_sessions(
 Perfect for long-running autonomous pipelines:
 
 ```python
-from session_enhancements import AutoRecoverySession
+from session_manager import AutoRecoverySession
 
 # Create auto-recovery session
 auto_session = AutoRecoverySession(

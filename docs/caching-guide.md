@@ -96,7 +96,7 @@ response3 = wrapper.ask("What is JavaScript?")  # Makes API call
 ```python
 # These will have different cache entries
 response1 = wrapper.ask("Explain AI", model="opus")
-response2 = wrapper.ask("Explain AI", model="haiku")  # Different cache key
+response2 = wrapper.ask("Explain AI", model="sonnet")  # Different cache key
 ```
 
 ### Clear Cache

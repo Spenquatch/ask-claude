@@ -15,7 +15,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from claude_code_wrapper import ClaudeCodeWrapper, ClaudeCodeConfig
-from session_enhancements import SessionManager, SessionTemplate, AutoRecoverySession
+from session_manager import SessionManager, SessionTemplate, AutoRecoverySession
 import time
 
 
