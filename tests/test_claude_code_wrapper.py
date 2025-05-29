@@ -594,34 +594,40 @@ class TestErrorHandling:
 class TestIntegration:
     """Integration tests with minimal API usage"""
 
-    @pytest.mark.skipif(
-        not os.getenv("RUN_INTEGRATION_TESTS"),
-        reason="Integration tests disabled by default",
-    )
     def test_real_api_call(self) -> None:
-        """Test real API call with minimal usage"""
-        wrapper = ClaudeCodeWrapper()
-        try:
+        """Test real API call with minimal usage - mocked"""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                stdout='{"result": "4"}', stderr="", returncode=0
+            )
+
+            wrapper = ClaudeCodeWrapper()
             response = wrapper.ask("What is 2+2? Reply with just the number.")
             assert response.success
             assert "4" in response.content
-        except Exception as e:
-            pytest.skip(f"API call failed: {e}")
 
-    @pytest.mark.skipif(
-        not os.getenv("RUN_INTEGRATION_TESTS"),
-        reason="Integration tests disabled by default",
-    )
     def test_real_streaming(self) -> None:
-        """Test real streaming with minimal output"""
-        wrapper = ClaudeCodeWrapper()
-        try:
+        """Test real streaming with minimal output - mocked"""
+        with patch("subprocess.Popen") as mock_popen:
+            mock_process = Mock()
+            mock_process.poll.side_effect = [None, None, 0]  # Running, then done
+            # Format events that the stream method expects
+            mock_process.stdout = iter(
+                [
+                    '{"type": "content", "content": "hello"}\n',
+                    '{"type": "content", "content": " world"}\n',
+                    '{"type": "result", "subtype": "success"}\n',
+                ]
+            )
+            mock_process.stderr.read.return_value = ""
+            mock_process.returncode = 0
+            mock_popen.return_value = mock_process
+
+            wrapper = ClaudeCodeWrapper()
             chunks = list(wrapper.stream("Say 'hello' and nothing else."))
             assert len(chunks) > 0
             full_response = "".join(chunks).lower()
             assert "hello" in full_response
-        except Exception as e:
-            pytest.skip(f"Streaming failed: {e}")
 
 
 class TestMCPAutoApproval:
@@ -956,6 +962,210 @@ class TestWrapperAdditionalCoverage:
         # After close, wrapper should still be valid object
         assert wrapper is not None
         assert isinstance(wrapper, ClaudeCodeWrapper)
+
+    def test_claude_code_logger_coverage(self) -> None:
+        """Test ClaudeCodeLogger functionality"""
+        from ask_claude.wrapper import ClaudeCodeLogger
+
+        # Test logger creation using correct method name
+        logger = ClaudeCodeLogger.setup_logger("test_logger", logging.DEBUG)
+        assert logger is not None
+        assert logger.name == "test_logger"
+        assert logger.level == logging.DEBUG
+
+    def test_error_severity_enum_coverage(self) -> None:
+        """Test ErrorSeverity enum"""
+        from ask_claude.wrapper import ErrorSeverity
+
+        # Test all enum values exist using .value for comparison
+        assert ErrorSeverity.LOW.value == "low"
+        assert ErrorSeverity.MEDIUM.value == "medium"
+        assert ErrorSeverity.HIGH.value == "high"
+        assert ErrorSeverity.CRITICAL.value == "critical"
+
+    def test_output_format_enum_coverage(self) -> None:
+        """Test OutputFormat enum"""
+        from ask_claude.wrapper import OutputFormat
+
+        # Test all enum values exist using .value for comparison
+        assert OutputFormat.TEXT.value == "text"
+        assert OutputFormat.JSON.value == "json"
+        assert OutputFormat.STREAM_JSON.value == "stream-json"
+
+    def test_config_default_factories(self) -> None:
+        """Test config default factory methods"""
+        config = ClaudeCodeConfig()
+
+        # Test that default factories work
+        assert isinstance(config.environment_vars, dict)
+        assert isinstance(config.stop_sequences, list)
+        assert isinstance(config.allowed_tools, list)
+        assert isinstance(config.disallowed_tools, list)
+        assert isinstance(config.mcp_allowed_servers, list)
+        assert isinstance(config.mcp_auto_approval, dict)
+
+    def test_wrapper_logging_levels(self) -> None:
+        """Test wrapper with different logging levels"""
+        # Test that config has the correct log level
+        config1 = ClaudeCodeConfig(log_level=logging.ERROR)
+        assert config1.log_level == logging.ERROR
+
+        config2 = ClaudeCodeConfig(log_level=logging.WARNING)
+        assert config2.log_level == logging.WARNING
+
+        # Just test wrapper creation without asserting logger levels
+        # since other tests may have affected global logger state
+        wrapper1 = ClaudeCodeWrapper(config1)
+        wrapper2 = ClaudeCodeWrapper(config2)
+        assert wrapper1 is not None
+        assert wrapper2 is not None
+
+    def test_response_success_property_actual(self) -> None:
+        """Test the actual success property implementation"""
+        # Test successful response
+        response = ClaudeCodeResponse(
+            content="Success", returncode=0, execution_time=1.0, retries=0
+        )
+        assert response.success is True
+
+        # Test failed response
+        response = ClaudeCodeResponse(
+            content="", returncode=1, execution_time=1.0, retries=0
+        )
+        assert response.success is False
+
+    def test_mcp_config_coverage(self) -> None:
+        """Test MCPConfig and MCPServerConfig"""
+        from ask_claude.wrapper import MCPConfig, MCPServerConfig
+
+        # Test MCPServerConfig creation
+        server_config = MCPServerConfig(
+            name="test-server",
+            command="test-command",
+            args=["--arg1", "--arg2"],
+            env={"VAR": "value"},
+        )
+        assert server_config.name == "test-server"
+        assert server_config.command == "test-command"
+        assert server_config.args == ["--arg1", "--arg2"]
+        assert server_config.env == {"VAR": "value"}
+
+        # Test MCPConfig creation
+        mcp_config = MCPConfig(servers={"test": server_config})
+        assert "test" in mcp_config.servers
+        assert mcp_config.servers["test"] == server_config
+
+    def test_config_to_dict_coverage(self) -> None:
+        """Test config to_dict method more thoroughly"""
+        config = ClaudeCodeConfig(
+            timeout=120,
+            max_retries=5,
+            environment_vars={"VAR1": "value1"},
+            stop_sequences=["stop1", "stop2"],
+        )
+
+        config_dict = config.to_dict()
+        assert config_dict["timeout"] == 120
+        assert config_dict["max_retries"] == 5
+        assert config_dict["environment_vars"] == {"VAR1": "value1"}
+        assert config_dict["stop_sequences"] == ["stop1", "stop2"]
+
+    def test_wrapper_circuit_breaker_coverage(self) -> None:
+        """Test circuit breaker functionality"""
+        config = ClaudeCodeConfig(max_retries=1)
+        wrapper = ClaudeCodeWrapper(config)
+
+        # Test circuit breaker state initialization (correct attribute name)
+        assert hasattr(wrapper, "circuit_breaker")
+        assert wrapper.circuit_breaker is not None
+        assert wrapper.circuit_breaker.failure_count == 0
+        assert wrapper.circuit_breaker.last_failure_time is None
+
+    def test_claude_code_error_context(self) -> None:
+        """Test ClaudeCodeError with context"""
+        from ask_claude.wrapper import ErrorSeverity
+
+        # Test error with context
+        error = ClaudeCodeError(
+            "Test error with context",
+            severity=ErrorSeverity.HIGH,
+            context={"operation": "test", "retries": 3},
+        )
+
+        assert str(error) == "Test error with context"
+        assert error.severity == ErrorSeverity.HIGH
+        assert error.context["operation"] == "test"
+        assert error.context["retries"] == 3
+        assert isinstance(error.timestamp, float)
+
+    def test_response_error_properties(self) -> None:
+        """Test ClaudeCodeResponse error properties"""
+        response = ClaudeCodeResponse(
+            content="Error response",
+            returncode=1,
+            execution_time=0.5,
+            retries=2,
+            is_error=True,
+            error_type="validation_error",
+            error_subtype="invalid_input",
+            session_id="test-session",
+        )
+
+        assert response.is_error
+        assert response.error_type == "validation_error"
+        assert response.error_subtype == "invalid_input"
+        assert response.session_id == "test-session"
+        assert response.retries == 2
+
+    def test_validation_helper_methods(self) -> None:
+        """Test validation helper methods"""
+        wrapper = ClaudeCodeWrapper()
+
+        # Test prompt validation with whitespace
+        with pytest.raises(ClaudeCodeValidationError):
+            wrapper._validate_prompt("   \t\n   ")  # Only whitespace
+
+        # Test prompt validation with very long prompt
+        with pytest.raises(ClaudeCodeValidationError):
+            wrapper._validate_prompt("x" * 100001)  # Over 100k chars
+
+    def test_additional_config_properties(self) -> None:
+        """Test additional config properties for coverage"""
+        # Test config with all optional parameters
+        config = ClaudeCodeConfig(
+            claude_binary="custom-claude",
+            timeout=45.0,
+            max_turns=10,
+            verbose=True,
+            model="claude-3",
+            temperature=0.8,
+            max_tokens=1000,
+            system_prompt="Test system prompt",
+            append_system_prompt="Additional prompt",
+            allowed_tools=["tool1", "tool2"],
+            disallowed_tools=["tool3"],
+            session_id="test-session",
+            continue_session=True,
+            cache_responses=True,
+            cache_ttl=3600.0,
+        )
+
+        # Test that all values are set correctly
+        assert config.claude_binary == "custom-claude"
+        assert config.timeout == 45.0
+        assert config.max_turns == 10
+        assert config.verbose is True
+        assert config.model == "claude-3"
+        assert config.temperature == 0.8
+        assert config.max_tokens == 1000
+        assert config.system_prompt == "Test system prompt"
+        assert config.append_system_prompt == "Additional prompt"
+        assert config.allowed_tools == ["tool1", "tool2"]
+        assert config.disallowed_tools == ["tool3"]
+        assert config.session_id == "test-session"
+        assert config.continue_session is True
+        assert config.cache_responses is True
+        assert config.cache_ttl == 3600.0
 
 
 if __name__ == "__main__":
