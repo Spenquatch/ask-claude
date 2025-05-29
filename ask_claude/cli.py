@@ -424,10 +424,12 @@ class ClaudeCLI:
                                             }
 
                                         # Get display info for this tool
-                                        emoji, action, display_fields = (
-                                            self._get_tool_display_info(
-                                                tool_name, tool_input
-                                            )
+                                        (
+                                            emoji,
+                                            action,
+                                            display_fields,
+                                        ) = self._get_tool_display_info(
+                                            tool_name, tool_input
                                         )
 
                                         # Special handling for sequential thinking
