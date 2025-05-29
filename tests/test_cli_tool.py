@@ -17,8 +17,10 @@ from ask_claude.cli import ClaudeCLI, create_parser, main  # noqa: E402
 from ask_claude.wrapper import (  # noqa: E402
     ClaudeCodeConfig,
     ClaudeCodeConfigurationError,
+    ClaudeCodeProcessError,
     ClaudeCodeResponse,
     ClaudeCodeTimeoutError,
+    ClaudeCodeValidationError,
     ClaudeCodeWrapper,
 )
 
@@ -1437,6 +1439,279 @@ class TestAdditionalCoverage:
             assert result in [0, 1]
 
 
+class TestCLIAskErrorHandling:
+    """Test ask command error handling"""
+
+    def test_ask_empty_query_error(self) -> None:
+        """Test ask command with empty query"""
+        cli = ClaudeCLI()
+        cli.wrapper = Mock()  # Set wrapper so it's not None
+
+        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+            result = cli.cmd_ask("")  # Empty query
+            assert result == 1
+            assert "Query cannot be empty" in mock_stderr.getvalue()
+
+    def test_ask_wrapper_not_initialized(self) -> None:
+        """Test ask when wrapper is not initialized"""
+        cli = ClaudeCLI()
+        cli.wrapper = None  # Explicitly set to None
+
+        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+            result = cli.cmd_ask("test query")
+            assert result == 1
+            assert "Wrapper not initialized" in mock_stderr.getvalue()
+
+    def test_ask_with_response_error(self) -> None:
+        """Test ask command when response has error"""
+        cli = ClaudeCLI()
+
+        mock_response = Mock()
+        mock_response.content = "Error response"
+        mock_response.is_error = True
+        mock_response.error_type = "api_error"
+        mock_response.error_subtype = "rate_limit"
+
+        mock_wrapper = Mock()
+        mock_wrapper.run.return_value = mock_response
+        cli.wrapper = mock_wrapper
+
+        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+            with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                result = cli.cmd_ask("test")
+                assert result == 1  # Error returns 1
+                stderr_output = mock_stderr.getvalue()
+                assert "Response Error: api_error" in stderr_output
+                assert "Subtype: rate_limit" in stderr_output
+
+    def test_ask_validation_error(self) -> None:
+        """Test ask command with validation error"""
+        cli = ClaudeCLI()
+
+        mock_wrapper = Mock()
+        mock_wrapper.run.side_effect = ClaudeCodeValidationError("Invalid prompt")
+        cli.wrapper = mock_wrapper
+
+        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+            result = cli.cmd_ask("test")
+            assert result == 1
+            assert "Validation Error: Invalid prompt" in mock_stderr.getvalue()
+
+    def test_ask_process_error_with_stderr(self) -> None:
+        """Test ask command with process error including stderr"""
+        cli = ClaudeCLI()
+
+        mock_wrapper = Mock()
+        error = ClaudeCodeProcessError(
+            "Process failed", returncode=2, stderr="Detailed error info"
+        )
+        mock_wrapper.run.side_effect = error
+        cli.wrapper = mock_wrapper
+
+        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+            result = cli.cmd_ask("test")
+            assert result == 2  # Returns the process error code
+            stderr_output = mock_stderr.getvalue()
+            assert "Process Error: Process failed" in stderr_output
+            assert "Details: Detailed error info" in stderr_output
+
+
+class TestStreamingErrorHandling:
+    """Test streaming error handling paths"""
+
+    def test_streaming_with_specific_tool_events(self) -> None:
+        """Test streaming with specific tool display events"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+        cli.wrapper = Mock()
+
+        # Test events with various tool types
+        events = [
+            {"type": "system", "subtype": "init", "session_id": "test-123"},
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "tool-1",
+                            "name": "WebSearch",
+                            "input": {"query": "test search"},
+                        }
+                    ]
+                },
+            },
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "tool-2",
+                            "name": "mcp__deepwiki__fetch",
+                            "input": {"url": "test.com"},
+                        }
+                    ]
+                },
+            },
+            {"type": "result", "subtype": "success"},
+        ]
+
+        cli.wrapper.run_streaming.return_value = iter(events)
+
+        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+            result = cli.cmd_stream("test query")
+
+        assert result == 0
+        stderr_output = mock_stderr.getvalue()
+        # Should show tool emojis
+        assert "🌐" in stderr_output  # WebSearch emoji
+        assert "📚" in stderr_output  # deepwiki emoji
+
+    def test_streaming_error_event(self) -> None:
+        """Test streaming with error event"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+        cli.wrapper = Mock()
+
+        events = [
+            {"type": "error", "message": "Stream error occurred"},
+            {"type": "result", "subtype": "error"},
+        ]
+
+        cli.wrapper.run_streaming.return_value = iter(events)
+
+        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+            result = cli.cmd_stream("test query")
+
+        assert result == 1  # Error count > 0
+        assert "Stream Error: Stream error occurred" in mock_stderr.getvalue()
+
+    def test_streaming_parse_error_verbose(self) -> None:
+        """Test streaming parse error in verbose mode"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+        cli.wrapper = Mock()
+
+        events = [{"type": "parse_error", "message": "Failed to parse JSON"}]
+
+        cli.wrapper.run_streaming.return_value = iter(events)
+
+        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+            result = cli.cmd_stream("test query", verbose=True)
+
+        stderr_output = mock_stderr.getvalue()
+        assert "Parse Error: Failed to parse JSON" in stderr_output
+
+
+class TestMainConfigHandling:
+    """Test main function config handling"""
+
+    def test_main_with_config_file_error(self) -> None:
+        """Test main with config file loading error"""
+        test_args = ["ask-claude", "--config", "nonexistent.json", "ask", "test"]
+
+        with patch("sys.argv", test_args):
+            # The config file doesn't exist, so it should use default config
+            with patch("ask_claude.cli.ClaudeCLI") as mock_cli_class:
+                mock_cli = Mock()
+                mock_cli.load_config.return_value = ClaudeCodeConfig()
+                mock_cli.cmd_ask.return_value = 0
+                mock_cli._build_approval_config.return_value = None
+                mock_cli.initialize_wrapper.return_value = True
+                mock_cli_class.return_value = mock_cli
+
+                # Mock the config file loading to fail
+                with patch("pathlib.Path.exists", return_value=True):
+                    with patch("builtins.open", side_effect=Exception("Config error")):
+                        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+                            result = main()
+
+        assert result == 1
+        assert "Failed to load config" in mock_stderr.getvalue()
+
+    def test_main_with_mcp_config(self) -> None:
+        """Test main with MCP config"""
+        import tempfile
+
+        # Create temporary MCP config
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"mcpServers": {"test": {"command": "test"}}}, f)
+            mcp_path = f.name
+
+        try:
+            test_args = ["ask-claude", "ask", "test", "--mcp-config", mcp_path]
+
+            with patch("sys.argv", test_args):
+                with patch("ask_claude.cli.ClaudeCLI") as mock_cli_class:
+                    mock_cli = Mock()
+                    mock_cli.load_config.return_value = ClaudeCodeConfig()
+                    mock_cli.cmd_ask.return_value = 0
+                    mock_cli._build_approval_config.return_value = None
+                    mock_cli_class.return_value = mock_cli
+
+                    result = main()
+
+            assert result == 0
+        finally:
+            os.unlink(mcp_path)
+
+
+class TestSessionErrorHandling:
+    """Test session command error handling"""
+
+    def test_session_with_eof_error(self) -> None:
+        """Test session handling EOF error"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+        cli.wrapper = Mock()
+
+        mock_session = Mock()
+        session_context = MagicMock()
+        session_context.__enter__.return_value = mock_session
+        session_context.__exit__.return_value = None
+        cli.wrapper.session.return_value = session_context
+
+        # Simulate EOF error
+        with patch("builtins.input", side_effect=EOFError):
+            with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                result = cli.cmd_session(interactive=True)
+
+        assert result == 0
+        output = mock_stdout.getvalue()
+        assert "Session ended" in output
+
+    def test_session_error_during_ask(self) -> None:
+        """Test session with error during ask"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+
+        mock_session = Mock()
+        mock_response = Mock()
+        mock_response.is_error = True
+        mock_response.error_type = "session_error"
+        mock_response.content = ""
+        mock_session.ask.return_value = mock_response
+
+        session_context = MagicMock()
+        session_context.__enter__.return_value = mock_session
+        session_context.__exit__.return_value = None
+
+        mock_wrapper = Mock()
+        mock_wrapper.session.return_value = session_context
+        cli.wrapper = mock_wrapper
+
+        # Mock initialize_wrapper to return True and not overwrite the wrapper
+        with patch.object(cli, "initialize_wrapper", return_value=True):
+            with patch("builtins.input", side_effect=["test query", "exit"]):
+                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                    result = cli.cmd_session(interactive=True)
+
+        assert result == 0
+        output = mock_stdout.getvalue()
+        assert "Error: session_error" in output
+
+
 class TestBenchmarkCommand:
     """Test benchmark functionality"""
 
@@ -1507,6 +1782,55 @@ class TestBenchmarkCommand:
                 assert "Running performance benchmark" in output
         finally:
             queries_file.unlink()
+
+
+class TestCLIStreamingDisplay:
+    """Test streaming display functionality"""
+
+    def test_streaming_with_show_stats(self) -> None:
+        """Test streaming with show_stats enabled"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+        cli.wrapper = Mock()
+
+        events = [
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "text", "text": "Hello"}]},
+            },
+            {
+                "type": "assistant",
+                "message": {"content": [{"type": "text", "text": " world"}]},
+            },
+            {"type": "result", "subtype": "success"},
+        ]
+
+        cli.wrapper.run_streaming.return_value = iter(events)
+
+        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+            with patch("sys.stdout", new_callable=StringIO):
+                result = cli.cmd_stream("test", show_stats=True)
+
+        assert result == 0
+        stderr_output = mock_stderr.getvalue()
+        assert "Stream Stats:" in stderr_output
+        assert "Events:" in stderr_output
+        assert "Content:" in stderr_output
+
+    def test_streaming_keyboard_interrupt(self) -> None:
+        """Test streaming interrupted by keyboard"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+        cli.wrapper = Mock()
+
+        # Mock streaming to raise KeyboardInterrupt
+        cli.wrapper.run_streaming.side_effect = KeyboardInterrupt()
+
+        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+            result = cli.cmd_stream("test")
+
+        assert result == 130  # SIGINT exit code
+        assert "Stream interrupted by user" in mock_stderr.getvalue()
 
 
 if __name__ == "__main__":
