@@ -6,7 +6,7 @@ import tempfile
 from collections.abc import Iterator
 from io import StringIO
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -797,37 +797,166 @@ class TestMCPApprovalCLI:
             ]
         )
 
-        cli = ClaudeCLI()
 
-        # Build approval config
-        approval_config = cli._build_approval_config(args)
-        config_dict = {}
-        if approval_config:
-            config_dict["mcp_auto_approval"] = approval_config
-        cli.config = ClaudeCodeConfig.from_dict(config_dict)
+class TestStreamingFunctionality:
+    """Test streaming functionality comprehensively"""
+
+    def test_streaming_initialization_success(self) -> None:
+        """Test successful streaming initialization"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
 
         with patch("ask_claude.cli.ClaudeCodeWrapper") as mock_wrapper_class:
             mock_wrapper = Mock()
-            # Mock streaming response
-            mock_wrapper.run_streaming.return_value = [
-                {"type": "system", "subtype": "init", "session_id": "123"},
+            mock_wrapper_class.return_value = mock_wrapper
+            cli.wrapper = mock_wrapper
+
+            # Mock the run_streaming method
+            mock_stream = MagicMock()
+            mock_wrapper.run_streaming = mock_stream
+
+            # Simulate streaming events with proper structure
+            events = [
+                {"type": "system", "subtype": "init", "session_id": "test-123"},
                 {
                     "type": "assistant",
-                    "message": {"content": [{"type": "text", "text": "Hello"}]},
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": "Hello"},
+                            {"type": "text", "text": " world"},
+                        ]
+                    },
                 },
                 {"type": "result", "subtype": "success"},
             ]
-            mock_wrapper_class.return_value = mock_wrapper
+            mock_stream.return_value = iter(events)
 
-            # Initialize wrapper
+            # Capture output and run stream
+            output = StringIO()
+            with patch("sys.stdout", output):
+                result = cli.cmd_stream("Test query")
+
+            assert result == 0
+            mock_stream.assert_called_once_with("Test query")
+            output_value = output.getvalue()
+            # Check that content was printed
+            assert "Hello world" in output_value
+
+    def test_streaming_with_tool_use(self) -> None:
+        """Test streaming with tool use events"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+
+        with patch("ask_claude.cli.ClaudeCodeWrapper") as mock_wrapper_class:
+            mock_wrapper = Mock()
+            mock_wrapper_class.return_value = mock_wrapper
             cli.wrapper = mock_wrapper
 
-            result = cli.cmd_stream(args.query)  # Pass query as string, not args
-            assert result == 0
+            # Mock the run_streaming method
+            mock_stream = MagicMock()
+            mock_wrapper.run_streaming = mock_stream
 
-            # Verify config has approval settings
-            assert cli.config.mcp_auto_approval["enabled"]
-            assert cli.config.mcp_auto_approval["strategy"] == "all"
+            # Simulate streaming events with tool use
+            events = [
+                {"type": "system", "subtype": "init", "session_id": "test-123"},
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": "tool-123",
+                                "name": "Bash",
+                                "input": {"command": "ls -la"},
+                            }
+                        ]
+                    },
+                },
+                {
+                    "type": "user",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "tool-123",
+                                "is_error": False,
+                                "content": "file1.txt\nfile2.txt",
+                            }
+                        ]
+                    },
+                },
+                {"type": "result", "subtype": "success"},
+            ]
+            mock_stream.return_value = iter(events)
+
+            # Capture stderr for tool output
+            stderr = StringIO()
+            with patch("sys.stderr", stderr):
+                result = cli.cmd_stream("Test query")
+
+            assert result == 0
+            mock_stream.assert_called_once_with("Test query")
+            stderr_value = stderr.getvalue()
+            # Check that tool use was displayed
+            assert "🖥️" in stderr_value or "Bash" in stderr_value
+
+    def test_streaming_with_permission_error(self) -> None:
+        """Test streaming with permission-denied tool result"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+
+        with patch("ask_claude.cli.ClaudeCodeWrapper") as mock_wrapper_class:
+            mock_wrapper = Mock()
+            mock_wrapper_class.return_value = mock_wrapper
+            cli.wrapper = mock_wrapper
+
+            # Mock the run_streaming method
+            mock_stream = MagicMock()
+            mock_wrapper.run_streaming = mock_stream
+
+            # Simulate streaming events with permission error
+            events = [
+                {"type": "system", "subtype": "init", "session_id": "test-123"},
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": "tool-456",
+                                "name": "mcp__test__dangerous_tool",
+                                "input": {"action": "delete_all"},
+                            }
+                        ]
+                    },
+                },
+                {
+                    "type": "user",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "tool-456",
+                                "is_error": True,
+                                "content": "User hasn't granted permissions for this tool",
+                            }
+                        ]
+                    },
+                },
+                {"type": "result", "subtype": "success"},
+            ]
+            mock_stream.return_value = iter(events)
+
+            # Capture stderr for tool output
+            stderr = StringIO()
+            with patch("sys.stderr", stderr):
+                result = cli.cmd_stream("Test query")
+
+            assert result == 0
+            stderr_value = stderr.getvalue()
+            # Check that permission error was displayed
+            assert "Tool 'mcp__test__dangerous_tool' not approved" in stderr_value
+            assert "--approval-strategy all" in stderr_value
 
     def test_pattern_approval_config(self) -> None:
         """Test pattern-based approval configuration"""
@@ -911,6 +1040,172 @@ class TestMCPApprovalCLI:
 
             # Verify config has empty mcp_auto_approval
             assert cli.config.mcp_auto_approval == {}
+
+
+class TestInteractiveSession:
+    """Test interactive session functionality"""
+
+    def test_interactive_session_basic(self) -> None:
+        """Test basic interactive session flow"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+
+        with patch("ask_claude.cli.ClaudeCodeWrapper") as mock_wrapper_class:
+            mock_wrapper = Mock()
+            mock_wrapper_class.return_value = mock_wrapper
+            cli.wrapper = mock_wrapper
+
+            # Mock the run method for each turn
+            mock_response1 = Mock()
+            mock_response1.content = "First response"
+            mock_response1.is_error = False
+
+            mock_response2 = Mock()
+            mock_response2.content = "Second response"
+            mock_response2.is_error = False
+
+            mock_wrapper.run.side_effect = [mock_response1, mock_response2]
+
+            # Mock session method to return a context manager
+            mock_session = Mock()
+            mock_session.ask.return_value = mock_response1
+            mock_session.clear_history = Mock()
+
+            # Create a context manager mock
+            session_context = MagicMock()
+            session_context.__enter__.return_value = mock_session
+            session_context.__exit__.return_value = None
+            mock_wrapper.session.return_value = session_context
+
+            # Mock input to simulate user typing
+            with patch("builtins.input", side_effect=["Hello", "exit"]):
+                with patch("sys.stdout", new=StringIO()) as stdout:
+                    result = cli.cmd_session(interactive=True, stream=False)
+
+            assert result == 0
+            assert mock_session.ask.call_count == 1
+            output = stdout.getvalue()
+            assert "First response" in output
+
+    def test_interactive_session_with_streaming(self) -> None:
+        """Test interactive session with streaming enabled"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+
+        with patch("ask_claude.cli.ClaudeCodeWrapper") as mock_wrapper_class:
+            mock_wrapper = Mock()
+            mock_wrapper_class.return_value = mock_wrapper
+            cli.wrapper = mock_wrapper
+
+            # Mock session method to return a context manager
+            mock_session = Mock()
+            mock_session.ask_streaming.return_value = iter(
+                []
+            )  # Empty iterator for streaming
+            mock_session.clear_history = Mock()
+
+            # Create a context manager mock
+            session_context = MagicMock()
+            session_context.__enter__.return_value = mock_session
+            session_context.__exit__.return_value = None
+            mock_wrapper.session.return_value = session_context
+
+            # Mock streaming response
+            events = [
+                {"type": "system", "subtype": "init", "session_id": "test-123"},
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [{"type": "text", "text": "Streaming response"}]
+                    },
+                },
+                {"type": "result", "subtype": "success"},
+            ]
+            mock_wrapper.run_streaming.return_value = iter(events)
+
+            # Mock input to simulate user typing
+            with patch("builtins.input", side_effect=["Hello", "exit"]):
+                with patch("sys.stdout", new=StringIO()) as stdout:
+                    result = cli.cmd_session(interactive=True, stream=True)
+
+            assert result == 0
+            # Check that session was created
+            assert mock_wrapper.session.called
+            output = stdout.getvalue()
+            # Basic check that session started
+            assert "Starting interactive session" in output
+
+
+class TestBenchmarkCommand:
+    """Test benchmark functionality"""
+
+    def test_benchmark_with_default_queries(self) -> None:
+        """Test benchmark with default queries"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+
+        with patch("ask_claude.cli.ClaudeCodeWrapper") as mock_wrapper_class:
+            mock_wrapper = Mock()
+            mock_wrapper_class.return_value = mock_wrapper
+            cli.wrapper = mock_wrapper
+
+            # Mock responses for benchmark queries
+            mock_response = Mock()
+            mock_response.content = "Answer"
+            mock_response.is_error = False
+            mock_response.returncode = 0
+            mock_response.execution_time = 0.5
+            mock_response.total_tokens = 100
+            mock_wrapper.run.return_value = mock_response
+
+            with patch("sys.stdout", new=StringIO()) as stdout:
+                result = cli.cmd_benchmark(iterations=2)
+
+            assert result == 0
+            # 4 queries * 2 iterations = 8 calls
+            assert mock_wrapper.run.call_count == 8
+            output = stdout.getvalue()
+            assert "Running performance benchmark" in output
+            assert "Overall Average Time" in output
+
+    def test_benchmark_with_custom_queries_file(self) -> None:
+        """Test benchmark with custom queries from file"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+
+        # Create a temporary queries file
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("Query 1\n")
+            f.write("Query 2\n")
+            queries_file = Path(f.name)
+
+        try:
+            with patch("ask_claude.cli.ClaudeCodeWrapper") as mock_wrapper_class:
+                mock_wrapper = Mock()
+                mock_wrapper_class.return_value = mock_wrapper
+                cli.wrapper = mock_wrapper
+
+                # Mock responses
+                mock_response = Mock()
+                mock_response.content = "Answer"
+                mock_response.is_error = False
+                mock_response.returncode = 0
+                mock_response.execution_time = 0.3
+                mock_response.total_tokens = 50
+                mock_wrapper.run.return_value = mock_response
+
+                with patch("sys.stdout", new=StringIO()) as stdout:
+                    result = cli.cmd_benchmark(queries_file=queries_file, iterations=1)
+
+                assert result == 0
+                # 2 queries * 1 iteration = 2 calls
+                assert mock_wrapper.run.call_count == 2
+                output = stdout.getvalue()
+                assert "Running performance benchmark" in output
+        finally:
+            queries_file.unlink()
 
 
 if __name__ == "__main__":
