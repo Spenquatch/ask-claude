@@ -37,7 +37,7 @@ jobs:
         python -c "from ask_claude import ask_claude, ClaudeCodeWrapper; print('Imports work!')"
 
     - name: Upload test artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test-dist
         path: dist/

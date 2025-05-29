@@ -64,7 +64,7 @@ Official releases for public consumption.
 
 ### 2. Create GitHub Release
 
-1. **Go to [GitHub Releases](https://github.com/spenquatch/ask-claude/releases)**
+1. **Go to [GitHub Releases](https://github.com/Spenquatch/ask-claude/releases)**
 
 2. **Click "Draft a new release"**
 
@@ -82,7 +82,7 @@ Official releases for public consumption.
 
 ### 3. Monitor Release Workflow
 
-1. **Check [GitHub Actions](https://github.com/spenquatch/ask-claude/actions)**
+1. **Check [GitHub Actions](https://github.com/Spenquatch/ask-claude/actions)**
    - Quality checks must pass
    - Build process creates distribution files
    - Publishing happens automatically based on release type

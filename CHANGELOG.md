@@ -33,4 +33,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Detailed metrics and logging
 - Cross-platform support (Linux, macOS, Windows)
 
-[0.1.0rc1]: https://github.com/spenquatch/ask-claude/releases/tag/v0.1.0rc1
+[0.1.0rc1]: https://github.com/Spenquatch/ask-claude/releases/tag/v0.1.0rc1

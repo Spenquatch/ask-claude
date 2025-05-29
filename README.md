@@ -4,8 +4,8 @@ A lightweight Python wrapper for the Claude Code CLI that adds enterprise featur
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://github.com/spenquatch/ask-claude/actions/workflows/tests.yml/badge.svg)](https://github.com/spenquatch/ask-claude/actions/workflows/tests.yml)
-[![codecov](https://codecov.io/gh/spenquatch/ask-claude/branch/main/graph/badge.svg)](https://codecov.io/gh/spenquatch/ask-claude)
+[![Tests](https://github.com/Spenquatch/ask-claude/actions/workflows/tests.yml/badge.svg)](https://github.com/Spenquatch/ask-claude/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/Spenquatch/ask-claude/branch/main/graph/badge.svg)](https://codecov.io/gh/Spenquatch/ask-claude)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue)](http://mypy-lang.org/)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
@@ -19,6 +19,25 @@ A lightweight Python wrapper for the Claude Code CLI that adds enterprise featur
 - 🌊 **Streaming Support** - Real-time response streaming
 - 🛡️ **Enterprise Ready** - Comprehensive error handling and logging
 
+## Prerequisites
+
+Before using this wrapper, you must have Claude Code CLI installed and authenticated:
+
+1. **Install Claude Code CLI** (requires Node.js)
+   ```bash
+   npm install -g @anthropic-ai/claude-code
+   ```
+
+2. **Authenticate with your Anthropic API key**
+   ```bash
+   claude login
+   ```
+
+3. **Verify installation**
+   ```bash
+   claude --version
+   ```
+
 ## Installation
 
 ### Option 1: From PyPI (Coming Soon - Phase 4)
@@ -28,20 +47,19 @@ pip install ask-claude
 
 ### Option 2: Development Installation
 ```bash
-# 1. Install Claude Code CLI first (see Anthropic docs)
-# 2. Clone and install with Poetry
-git clone <repository-url>
-cd ask_claude
+# Clone and install with Poetry
+git clone https://github.com/Spenquatch/ask-claude.git
+cd ask-claude
 poetry install
 
-# 3. Verify it works
+# Verify it works
 poetry run python getting_started.py
 ```
 
 ### Option 3: Traditional pip install
 ```bash
-git clone <repository-url>
-cd ask_claude
+git clone https://github.com/Spenquatch/ask-claude.git
+cd ask-claude
 pip install -e .
 ```
 
@@ -151,7 +169,8 @@ ask_claude/
 ## Requirements
 
 - Python 3.10+ (required for MCP support)
-- Claude Code CLI installed
+- Node.js (for Claude Code CLI installation)
+- Claude Code CLI installed and authenticated
 
 ## Contributing
 
@@ -178,8 +197,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Support
 
 - 📖 [Documentation](docs/)
-- 🐛 [Issues](https://github.com/spenquatch/ask_claude/issues)
-- 💬 [Discussions](https://github.com/spenquatch/ask_claude/discussions)
+- 🐛 [Issues](https://github.com/Spenquatch/ask-claude/issues)
+- 💬 [Discussions](https://github.com/Spenquatch/ask-claude/discussions)
 
 ---
 

@@ -5,9 +5,9 @@ description = "A production-ready Python wrapper for the Claude Code CLI with en
 authors = ["Spenser McConnell <spenser@example.com>"]
 license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/spenquatch/ask-claude"
-repository = "https://github.com/spenquatch/ask-claude"
-documentation = "https://github.com/spenquatch/ask-claude/tree/main/docs"
+homepage = "https://github.com/Spenquatch/ask-claude"
+repository = "https://github.com/Spenquatch/ask-claude"
+documentation = "https://github.com/Spenquatch/ask-claude/tree/main/docs"
 keywords = ["claude", "ai", "cli", "wrapper", "anthropic"]
 classifiers = [
     "Development Status :: 4 - Beta",
