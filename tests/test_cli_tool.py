@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import tempfile
+from collections.abc import Iterator
 from io import StringIO
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -16,7 +17,15 @@ from ask_claude.wrapper import (
     ClaudeCodeConfig,
     ClaudeCodeResponse,
     ClaudeCodeTimeoutError,
+    ClaudeCodeWrapper,
 )
+
+
+@pytest.fixture(autouse=True)
+def mock_validate_binary() -> Iterator[None]:
+    """Automatically mock binary validation for all tests"""
+    with patch.object(ClaudeCodeWrapper, "_validate_binary"):
+        yield
 
 
 class TestCLIParser:
@@ -244,11 +253,13 @@ class TestClaudeCLI:
         mock_wrapper.session.return_value = mock_context
         cli.wrapper = mock_wrapper
 
-        # Mock user input
-        with patch("builtins.input", side_effect=["Hello", "exit"]):
-            with patch("sys.stdout", new_callable=StringIO):
-                result = cli.cmd_session(interactive=True)
-                assert result == 0
+        # Mock initialize_wrapper to return True and not overwrite the wrapper
+        with patch.object(cli, "initialize_wrapper", return_value=True):
+            # Mock user input
+            with patch("builtins.input", side_effect=["Hello", "exit"]):
+                with patch("sys.stdout", new_callable=StringIO):
+                    result = cli.cmd_session(interactive=True)
+                    assert result == 0
 
     def test_cmd_health(self, cli: ClaudeCLI) -> None:
         """Test health check command"""

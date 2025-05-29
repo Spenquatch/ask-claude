@@ -28,6 +28,13 @@ from ask_claude.wrapper import (
 )
 
 
+@pytest.fixture(autouse=True)
+def mock_validate_binary() -> Iterator[None]:
+    """Automatically mock binary validation for all tests"""
+    with patch.object(ClaudeCodeWrapper, "_validate_binary"):
+        yield
+
+
 class TestSessionContinuation:
     """Test session continuation features."""
 
