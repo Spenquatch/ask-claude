@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sys
 import tempfile
@@ -12,9 +13,10 @@ import pytest
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ask_claude.cli import ClaudeCLI, create_parser, main
-from ask_claude.wrapper import (
+from ask_claude.cli import ClaudeCLI, create_parser, main  # noqa: E402
+from ask_claude.wrapper import (  # noqa: E402
     ClaudeCodeConfig,
+    ClaudeCodeConfigurationError,
     ClaudeCodeResponse,
     ClaudeCodeTimeoutError,
     ClaudeCodeWrapper,
@@ -392,6 +394,296 @@ class TestCLIIntegration:
             result = cli.cmd_ask("Test query")
             assert result == 1
             assert "Timeout Error" in mock_stderr.getvalue()
+
+
+class TestToolDisplayInfo:
+    """Test tool display information functionality"""
+
+    def test_exact_tool_match_bash(self) -> None:
+        """Test exact match for Bash tool"""
+        cli = ClaudeCLI()
+
+        emoji, action, fields = cli._get_tool_display_info(
+            "Bash", {"command": "ls -la"}
+        )
+
+        assert emoji == "🖥️"
+        assert action == "run Bash command"
+        assert fields == {"command": "Command", "description": "Purpose"}
+
+    def test_exact_tool_match_read(self) -> None:
+        """Test exact match for Read tool"""
+        cli = ClaudeCLI()
+
+        emoji, action, fields = cli._get_tool_display_info(
+            "Read", {"file_path": "/path/to/file"}
+        )
+
+        assert emoji == "📄"
+        assert action == "read file"
+        assert fields == {"file_path": "File"}
+
+    def test_sequential_thinking_pattern_match(self) -> None:
+        """Test pattern match for sequential-thinking MCP tool"""
+        cli = ClaudeCLI()
+
+        emoji, action, fields = cli._get_tool_display_info(
+            "mcp__sequential-thinking__sequentialthinking",
+            {"thought": "Testing", "thoughtNumber": 1},
+        )
+
+        assert emoji == "🤔"
+        assert action == "think"
+        assert fields == {
+            "thought": "Thought",
+            "thoughtNumber": "Step",
+            "totalThoughts": "Total",
+        }
+
+    def test_default_fallback_for_unknown_tool(self) -> None:
+        """Test default fallback for unknown tool"""
+        cli = ClaudeCLI()
+
+        emoji, action, fields = cli._get_tool_display_info(
+            "UnknownTool", {"param": "value"}
+        )
+
+        assert emoji == "🔧"
+        assert action == "use tool"
+        assert fields == {
+            "description": "Purpose",
+            "query": "Query",
+            "command": "Command",
+        }
+
+
+class TestCLIErrorHandling:
+    """Test CLI error handling paths"""
+
+    def test_config_loading_error_handling(self) -> None:
+        """Test error handling when config file is malformed"""
+        cli = ClaudeCLI()
+
+        # Create a temporary file with invalid JSON
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write('{"invalid": json}')  # Invalid JSON
+            config_path = Path(f.name)
+
+        try:
+            # Should handle the JSON error gracefully and return default config
+            config = cli.load_config(config_path)
+
+            # Should fall back to default config
+            assert isinstance(config, ClaudeCodeConfig)
+            assert config.claude_binary == "claude"  # Default value
+
+        finally:
+            # Clean up
+            config_path.unlink()
+
+    def test_wrapper_initialization_error_handling(self) -> None:
+        """Test error handling when wrapper initialization fails"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+
+        # Mock ClaudeCodeWrapper to raise a configuration error
+        with patch("ask_claude.cli.ClaudeCodeWrapper") as mock_wrapper:
+            mock_wrapper.side_effect = ClaudeCodeConfigurationError(
+                "Test configuration error", config_field="test_field"
+            )
+
+            # Capture stderr
+            with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+                result = cli.initialize_wrapper()
+
+                # Should return False and print error
+                assert result is False
+                assert cli.wrapper is None
+
+                # Check error output
+                error_output = mock_stderr.getvalue()
+                assert (
+                    "❌ Configuration Error: Test configuration error" in error_output
+                )
+                assert "Field: test_field" in error_output
+
+    def test_session_non_interactive_error(self) -> None:
+        """Test error when trying to use non-interactive session"""
+        cli = ClaudeCLI()
+
+        # Capture stderr
+        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+            result = cli.cmd_session(interactive=False)
+
+            # Should return error code 1
+            assert result == 1
+
+            # Check error message
+            error_output = mock_stderr.getvalue()
+            assert (
+                "❌ Error: Non-interactive sessions not yet implemented" in error_output
+            )
+
+    def test_session_initialization_failure(self) -> None:
+        """Test session command when wrapper initialization fails"""
+        cli = ClaudeCLI()
+
+        # Mock initialize_wrapper to return False (failure)
+        with patch.object(cli, "initialize_wrapper", return_value=False):
+            result = cli.cmd_session(interactive=True)
+
+            # Should return error code 1
+            assert result == 1
+
+    def test_stream_empty_query_error(self) -> None:
+        """Test streaming command with empty query"""
+        cli = ClaudeCLI()
+
+        # Capture stderr
+        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+            result = cli.cmd_stream("")  # Empty query
+
+            # Should return error code 1
+            assert result == 1
+
+            # Check error message
+            error_output = mock_stderr.getvalue()
+            assert "❌ Error: Query cannot be empty" in error_output
+
+    def test_main_keyboard_interrupt_handling(self) -> None:
+        """Test main function KeyboardInterrupt handling"""
+        # Mock sys.argv to simulate CLI usage
+        test_args = ["ask-claude", "ask", "test query"]
+
+        # Mock ClaudeCLI.cmd_ask to raise KeyboardInterrupt
+        with patch("sys.argv", test_args):
+            with patch("ask_claude.cli.ClaudeCLI") as mock_cli_class:
+                mock_cli = Mock()
+                mock_cli.load_config.return_value = None
+                mock_cli.cmd_ask.side_effect = KeyboardInterrupt()
+                mock_cli_class.return_value = mock_cli
+
+                # Capture stderr
+                with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+                    result = main()
+
+                    # Should return exit code 130 (standard for SIGINT)
+                    assert result == 130
+
+                    # Check interrupt message
+                    error_output = mock_stderr.getvalue()
+                    assert "⏹️  Operation interrupted by user" in error_output
+
+    def test_main_general_exception_handling(self) -> None:
+        """Test main function general exception handling"""
+        # Mock sys.argv to simulate CLI usage
+        test_args = ["ask-claude", "ask", "test query"]
+
+        # Mock ClaudeCLI.cmd_ask to raise a general exception
+        with patch("sys.argv", test_args):
+            with patch("ask_claude.cli.ClaudeCLI") as mock_cli_class:
+                mock_cli = Mock()
+                mock_cli.load_config.return_value = None
+                mock_cli.cmd_ask.side_effect = RuntimeError("Test error")
+                mock_cli_class.return_value = mock_cli
+
+                # Capture stderr
+                with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+                    result = main()
+
+                    # Should return exit code 1
+                    assert result == 1
+
+                    # Check error message
+                    error_output = mock_stderr.getvalue()
+                    assert "❌ Unexpected error: Test error" in error_output
+
+    def test_wrapper_initialization_verbose_mode(self) -> None:
+        """Test wrapper initialization with verbose mode"""
+        cli = ClaudeCLI()
+        cli.config = ClaudeCodeConfig()
+
+        # Mock ClaudeCodeWrapper to track if it was called
+        with patch("ask_claude.cli.ClaudeCodeWrapper") as mock_wrapper:
+            mock_wrapper.return_value = Mock()
+
+            result = cli.initialize_wrapper(verbose=True)
+
+            # Should succeed
+            assert result is True
+
+            # Should have set log level to INFO
+            assert cli.config.log_level == logging.INFO
+
+            # Should have called ClaudeCodeWrapper with the config
+            mock_wrapper.assert_called_once_with(cli.config)
+
+    def test_config_loading_with_path_conversion(self) -> None:
+        """Test config loading with path conversion for working_directory"""
+        cli = ClaudeCLI()
+
+        # Create a real temporary directory for working_directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_data = {"working_directory": temp_dir, "timeout": 120}
+
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".json", delete=False
+            ) as f:
+                json.dump(config_data, f)
+                config_path = Path(f.name)
+
+            try:
+                config = cli.load_config(config_path)
+
+                # Should convert string path to Path object
+                assert isinstance(config.working_directory, Path)
+                assert str(config.working_directory) == temp_dir
+
+                # Other values should be preserved
+                assert config.timeout == 120
+
+            finally:
+                config_path.unlink()
+
+    def test_stream_verbose_mode_initialization(self) -> None:
+        """Test stream command with verbose mode shows initialization message"""
+        cli = ClaudeCLI()
+        cli.wrapper = Mock()
+
+        # Mock the stream method to avoid complex streaming logic
+        cli.wrapper.stream.side_effect = StopIteration("Mock end")
+
+        # Capture stderr for verbose output
+        with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+            # Should catch StopIteration and return error code
+            cli.cmd_stream("test query", verbose=True)
+
+            # Check that verbose initialization message was printed
+            error_output = mock_stderr.getvalue()
+            assert "🌊 Starting stream..." in error_output
+
+    def test_stream_exception_handling(self) -> None:
+        """Test stream command exception handling"""
+        cli = ClaudeCLI()
+
+        # Mock initialize_wrapper to succeed and set wrapper
+        with patch.object(cli, "initialize_wrapper", return_value=True):
+            cli.wrapper = Mock()
+
+            # Mock the stream method to raise an exception during iteration
+            cli.wrapper.stream.return_value = iter([])  # Empty iterator
+            cli.wrapper.stream.side_effect = RuntimeError("Stream failed")
+
+            # Capture stderr for error output
+            with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+                result = cli.cmd_stream("test query")
+
+                # Should return error code 1
+                assert result == 1
+
+                # Check error message contains the exception
+                error_output = mock_stderr.getvalue()
+                assert "❌ Stream Error:" in error_output
 
 
 class TestMCPApprovalCLI:
