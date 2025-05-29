@@ -111,6 +111,10 @@ strict_equality = true
 module = "tests.*"
 disallow_untyped_decorators = false
 
+[[tool.mypy.overrides]]
+module = "mcp.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q --strict-markers"
