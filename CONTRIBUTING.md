@@ -141,8 +141,8 @@ Include:
 ## Getting Help
 
 - 📖 [Documentation](docs/README.md)
-- 💬 [GitHub Discussions](https://github.com/yourusername/ask-claude/discussions)
-- 🐛 [Issue Tracker](https://github.com/yourusername/ask-claude/issues)
+- 💬 [GitHub Discussions](https://github.com/spenquatch/ask-claude/discussions)
+- 🐛 [Issue Tracker](https://github.com/spenquatch/ask-claude/issues)
 
 ## Recognition
 

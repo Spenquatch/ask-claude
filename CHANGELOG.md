@@ -38,5 +38,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Python 3.10+ required
 - Claude Code CLI must be installed separately
 
-[Unreleased]: https://github.com/yourusername/ask-claude/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/yourusername/ask-claude/releases/tag/v0.1.0
+[Unreleased]: https://github.com/spenquatch/ask-claude/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/spenquatch/ask-claude/releases/tag/v0.1.0

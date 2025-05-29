@@ -4,8 +4,8 @@ A lightweight Python wrapper for the Claude Code CLI that adds enterprise featur
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://github.com/yourusername/ask-claude/actions/workflows/tests.yml/badge.svg)](https://github.com/yourusername/ask-claude/actions/workflows/tests.yml)
-[![codecov](https://codecov.io/gh/yourusername/ask-claude/branch/main/graph/badge.svg)](https://codecov.io/gh/yourusername/ask-claude)
+[![Tests](https://github.com/spenquatch/ask-claude/actions/workflows/tests.yml/badge.svg)](https://github.com/spenquatch/ask-claude/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/spenquatch/ask-claude/branch/main/graph/badge.svg)](https://codecov.io/gh/spenquatch/ask-claude)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue)](http://mypy-lang.org/)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
@@ -178,8 +178,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Support
 
 - 📖 [Documentation](docs/)
-- 🐛 [Issues](https://github.com/yourusername/ask_claude/issues)
-- 💬 [Discussions](https://github.com/yourusername/ask_claude/discussions)
+- 🐛 [Issues](https://github.com/spenquatch/ask_claude/issues)
+- 💬 [Discussions](https://github.com/spenquatch/ask_claude/discussions)
 
 ---
 
