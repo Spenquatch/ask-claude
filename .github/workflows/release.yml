@@ -1,0 +1,197 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      test_pypi:
+        description: 'Publish to Test PyPI instead of PyPI'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  quality-check:
+    name: Quality Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Load cached venv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-3.10-${{ hashFiles('**/poetry.lock') }}
+
+    - name: Install dependencies
+      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      run: poetry install --no-interaction --no-root
+
+    - name: Install project
+      run: poetry install --no-interaction
+
+    - name: Run tests
+      run: poetry run pytest
+
+    - name: Run ruff
+      run: |
+        poetry run ruff check ask_claude/
+        poetry run ruff format --check ask_claude/
+
+    - name: Run mypy
+      run: poetry run mypy ask_claude/
+
+  build:
+    name: Build Distribution
+    needs: quality-check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+
+    - name: Check version consistency
+      run: |
+        # Get version from pyproject.toml
+        POETRY_VERSION=$(poetry version -s)
+        echo "Poetry version: $POETRY_VERSION"
+
+        # Get version from git tag (if this is a release)
+        if [[ "${{ github.event_name }}" == "release" ]]; then
+          TAG_VERSION="${{ github.event.release.tag_name }}"
+          # Remove 'v' prefix if present
+          TAG_VERSION=${TAG_VERSION#v}
+          echo "Tag version: $TAG_VERSION"
+
+          if [[ "$POETRY_VERSION" != "$TAG_VERSION" ]]; then
+            echo "Error: Poetry version ($POETRY_VERSION) doesn't match tag version ($TAG_VERSION)"
+            exit 1
+          fi
+        fi
+
+    - name: Build package
+      run: poetry build
+
+    - name: Check build
+      run: |
+        pip install twine
+        twine check dist/*
+        ls -la dist/
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist
+        path: dist/
+
+  publish-test-pypi:
+    name: Publish to Test PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.test_pypi == 'true') ||
+      (github.event_name == 'release' && contains(github.event.release.tag_name, 'rc'))
+    environment:
+      name: test-pypi
+      url: https://test.pypi.org/project/ask-claude/
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: dist
+        path: dist/
+
+    - name: Publish to Test PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+        skip-existing: true
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'release' &&
+      !contains(github.event.release.tag_name, 'rc') &&
+      !github.event.release.prerelease
+    environment:
+      name: pypi
+      url: https://pypi.org/project/ask-claude/
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: dist
+        path: dist/
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+
+  verify-installation:
+    name: Verify Installation
+    needs: [publish-test-pypi, publish-pypi]
+    if: always() && (needs.publish-test-pypi.result == 'success' || needs.publish-pypi.result == 'success')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Wait for package availability
+      run: sleep 60  # Give PyPI time to update
+
+    - name: Install from Test PyPI
+      if: needs.publish-test-pypi.result == 'success'
+      run: |
+        pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ ask-claude
+
+    - name: Install from PyPI
+      if: needs.publish-pypi.result == 'success'
+      run: |
+        pip install ask-claude
+
+    - name: Verify installation
+      run: |
+        python -c "from ask_claude import __version__; print(f'Version: {__version__}')"
+        ask-claude --version || echo "CLI not available yet"
+
+    - name: Test basic import
+      run: |
+        python -c "from ask_claude import ask_claude, ClaudeCodeWrapper; print('Import successful')"

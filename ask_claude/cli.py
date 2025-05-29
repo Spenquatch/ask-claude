@@ -23,6 +23,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .wrapper import (
     ClaudeCodeConfig,
     ClaudeCodeConfigurationError,
@@ -852,6 +853,9 @@ Examples:
     parser.add_argument("--config", "-c", type=Path, help="Configuration file path")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument("--quiet", "-q", action="store_true", help="Quiet mode")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
 
     # Subcommands
     subparsers = parser.add_subparsers(dest="command", help="Available commands")

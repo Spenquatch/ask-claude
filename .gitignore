@@ -10,3 +10,11 @@ PACKAGE-PLAN.md
 .ruff_cache
 .mypy_cache
 .coverage
+htmlcov/
+coverage.xml
+coverage.json
+dist/
+build/
+*.egg-info/
+*.egg
+*.whl

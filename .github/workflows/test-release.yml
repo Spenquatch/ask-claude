@@ -1,0 +1,43 @@
+name: Test Release Process
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-build:
+    name: Test Build Process
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+
+    - name: Install dependencies
+      run: poetry install
+
+    - name: Build package
+      run: poetry build
+
+    - name: Check build output
+      run: |
+        ls -la dist/
+        pip install twine
+        twine check dist/*
+
+    - name: Test local installation
+      run: |
+        pip install dist/*.whl
+        python -c "from ask_claude import __version__; print(f'Version: {__version__}')"
+        python -c "from ask_claude import ask_claude, ClaudeCodeWrapper; print('Imports work!')"
+
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-dist
+        path: dist/

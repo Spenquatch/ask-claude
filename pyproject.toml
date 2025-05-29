@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ask-claude"
-version = "0.1.0"
+version = "0.1.0rc1"
 description = "A production-ready Python wrapper for the Claude Code CLI with enterprise features"
 authors = ["Spenser McConnell <spenser@example.com>"]
 license = "MIT"
