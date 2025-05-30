@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "ask-claude"
-version = "0.1.0rc1"
-description = "A production-ready Python wrapper for the Claude Code CLI with enterprise features"
-authors = ["Spenser McConnell <spenser@example.com>"]
+version = "0.1.0"
+description = "A lightweight Python wrapper for the Claude Code CLI with auto approval features"
+authors = ["Spenser McConnell <spensermcconnell@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/Spenquatch/ask-claude"
